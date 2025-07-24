@@ -44,16 +44,23 @@ class QwenDevr:
         self.workspace.mkdir(exist_ok=True)
         
         # Initialize Nexus with OpenRouter endpoint for Qwen
+        # Default to latest Qwen3-235B (free on OpenRouter!)
+        model = kwargs.get('model', 'qwen/qwen3-235b-a22b-07-25:free')
+        
         self.qwen = NexusConnector(
             provider=AIProvider.OPENAI,  # Use OpenAI connector
             api_key=api_key,
-            model="qwen/qwen-2.5-72b-instruct",  # OpenRouter model ID
+            model=model,  # OpenRouter model ID
             base_url="https://openrouter.ai/api/v1",  # OpenRouter endpoint
             workspace=str(self.workspace),
             auto_execute=True,
             max_iterations=10,
             verbose=False
         )
+        
+        # Store model info
+        self.current_model = model
+        self.model_info = self.get_model_info(model)
         
         # Development tools and patterns
         self.dev_tools = [
@@ -71,14 +78,115 @@ class QwenDevr:
             "game": "Game development project",
             "mobile": "Mobile app backend"
         }
+        
+        # Available Qwen models on OpenRouter
+        self.available_models = {
+            "qwen3-235b": {
+                "id": "qwen/qwen3-235b-a22b-07-25:free",
+                "name": "Qwen3-235B (Latest, FREE!)",
+                "description": "Most advanced Qwen model, 235B parameters, completely free",
+                "cost": "FREE",
+                "speed": "⚡⚡⚡⚡",
+                "quality": "🎯🎯🎯🎯🎯"
+            },
+            "qwen2.5-72b": {
+                "id": "qwen/qwen-2.5-72b-instruct",
+                "name": "Qwen2.5-72B-Instruct",
+                "description": "Previous generation, 72B parameters, very fast",
+                "cost": "$0.40/1M tokens",
+                "speed": "⚡⚡⚡⚡⚡",
+                "quality": "🎯🎯🎯🎯"
+            },
+            "qwen2.5-coder": {
+                "id": "qwen/qwen-2.5-coder-32b-instruct",
+                "name": "Qwen2.5-Coder-32B",
+                "description": "Specialized for coding tasks, 32B parameters",
+                "cost": "$0.20/1M tokens",
+                "speed": "⚡⚡⚡⚡⚡",
+                "quality": "🎯🎯🎯🎯"
+            }
+        }
+    
+    def get_model_info(self, model_id: str) -> Dict[str, str]:
+        """Get information about the current model."""
+        for key, info in self.available_models.items():
+            if info["id"] == model_id:
+                return info
+        return {
+            "name": model_id,
+            "description": "Custom model",
+            "cost": "Unknown",
+            "speed": "⚡",
+            "quality": "🎯"
+        }
+    
+    async def switch_model(self, model_key: str) -> Dict[str, Any]:
+        """Switch to a different Qwen model."""
+        if model_key not in self.available_models:
+            available = ", ".join(self.available_models.keys())
+            return {"success": False, "error": f"Unknown model. Available: {available}"}
+        
+        model_info = self.available_models[model_key]
+        
+        # Create new connector with different model
+        self.qwen = NexusConnector(
+            provider=AIProvider.OPENAI,
+            api_key=self.qwen.api_key,
+            model=model_info["id"],
+            base_url="https://openrouter.ai/api/v1",
+            workspace=str(self.workspace),
+            auto_execute=True,
+            max_iterations=10,
+            verbose=False
+        )
+        
+        self.current_model = model_info["id"]
+        self.model_info = model_info
+        
+        return {
+            "success": True,
+            "model": model_info["name"],
+            "description": model_info["description"],
+            "cost": model_info["cost"]
+        }
+    
+    def show_models(self):
+        """Show available Qwen models."""
+        table = Table(title="🤖 Available Qwen Models")
+        table.add_column("Key", style="cyan", no_wrap=True)
+        table.add_column("Model", style="white")
+        table.add_column("Description", style="white")
+        table.add_column("Cost", style="green")
+        table.add_column("Speed", justify="center")
+        table.add_column("Quality", justify="center")
+        
+        for key, info in self.available_models.items():
+            # Mark current model
+            current = "→ " if info["id"] == self.current_model else "  "
+            table.add_row(
+                f"{current}{key}",
+                info["name"],
+                info["description"],
+                info["cost"],
+                info["speed"],
+                info["quality"]
+            )
+        
+        console.print(table)
     
     async def welcome(self):
         """Display welcome message."""
-        welcome_text = """
+        model_name = self.model_info.get("name", "Qwen Model")
+        model_cost = self.model_info.get("cost", "Unknown cost")
+        
+        welcome_text = f"""
 # 🚀 QwenDevr - The Ultimate Qwen CLI
 
-Powered by **Qwen2.5-72B-Instruct** via OpenRouter API
-*Fast, efficient development assistance without thinking tokens*
+Powered by **{model_name}** via OpenRouter API  
+*Cost: {model_cost} | Fast, efficient development assistance without thinking tokens*
+
+## ✨ NEW: Qwen3-235B is FREE on OpenRouter!
+Most advanced Qwen model with 235B parameters - completely free to use!
 
 ## Quick Commands:
 - `analyze` - Analyze current directory
@@ -87,6 +195,7 @@ Powered by **Qwen2.5-72B-Instruct** via OpenRouter API
 - `test <file>` - Generate tests
 - `docs` - Generate documentation
 - `refactor <file>` - Refactor code
+- `models` - Show/switch between Qwen models
 - `help` - Show detailed help
         """
         
@@ -489,6 +598,24 @@ Powered by **Qwen2.5-72B-Instruct** via OpenRouter API
                 result = await self.refactor_code(file_path, requirements)
                 self.display_result("Code Refactoring", result)
             
+            elif command == "models":
+                if not args:
+                    # Show available models
+                    self.show_models()
+                else:
+                    # Switch model
+                    result = await self.switch_model(args[0])
+                    if result["success"]:
+                        console.print(f"✅ [green]Switched to {result['model']}[/green]")
+                        console.print(f"📝 {result['description']}")
+                        console.print(f"💰 Cost: {result['cost']}")
+                    else:
+                        console.print(f"❌ {result['error']}", style="red")
+            
+            elif command == "model":
+                # Alias for models command
+                await self.handle_command("models", args, interactive)
+            
             else:
                 # Treat as free-form development request
                 full_request = f"{command} {' '.join(args)}"
@@ -579,6 +706,11 @@ Powered by **Qwen2.5-72B-Instruct** via OpenRouter API
 - `docs [scope]` - Generate documentation
 - `refactor <file> <requirements>` - Refactor code
 
+## Model Management:
+- `models` - Show available Qwen models
+- `models <key>` - Switch to different model
+- Available models: qwen3-235b (FREE!), qwen2.5-72b, qwen2.5-coder
+
 ## Project Types (for setup):
 - `web` - FastAPI/Flask web application
 - `api` - REST API service  
@@ -596,7 +728,14 @@ fix main.py performance issues  # Fix performance
 test utils.py  # Generate tests
 docs api  # Generate API docs
 refactor old_code.py apply SOLID principles
+models qwen3-235b  # Switch to FREE Qwen3-235B
 ```
+
+## ✨ NEW: Qwen3-235B (FREE!)
+The latest and most powerful Qwen model is now available for FREE on OpenRouter!
+- 235B parameters (vs 72B in previous version)
+- Significantly improved capabilities
+- Zero cost - perfect for extensive development work
 
 ## Free-form Requests:
 You can also make natural language requests:
@@ -636,6 +775,8 @@ Examples:
     parser.add_argument("--analyze", help="Analyze project with optional focus")
     parser.add_argument("--docs", help="Generate documentation")
     parser.add_argument("--workspace", "-w", default="./qwen_workspace", help="Workspace directory")
+    parser.add_argument("--model", "-m", choices=["qwen3-235b", "qwen2.5-72b", "qwen2.5-coder"], 
+                       default="qwen3-235b", help="Qwen model to use (default: qwen3-235b FREE!)")
     
     args = parser.parse_args()
     
@@ -647,8 +788,15 @@ Examples:
         console.print("💡 Set it with: export OPENROUTER_API_KEY='your-key-here'")
         sys.exit(1)
     
-    # Initialize QwenDevr
-    qwen_devr = QwenDevr(api_key, args.workspace)
+    # Initialize QwenDevr with specified model
+    available_models = {
+        "qwen3-235b": "qwen/qwen3-235b-a22b-07-25:free",
+        "qwen2.5-72b": "qwen/qwen-2.5-72b-instruct", 
+        "qwen2.5-coder": "qwen/qwen-2.5-coder-32b-instruct"
+    }
+    
+    selected_model = available_models[args.model]
+    qwen_devr = QwenDevr(api_key, args.workspace, model=selected_model)
     
     try:
         if args.interactive:

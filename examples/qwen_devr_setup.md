@@ -1,15 +1,18 @@
 # QwenDevr - The Ultimate Qwen CLI Setup Guide
 
-🚀 **Claude Code-inspired development assistant powered by Qwen2.5-72B-Instruct via OpenRouter**
+🚀 **Claude Code-inspired development assistant powered by Qwen3-235B (FREE!) via OpenRouter**
 
 ## Features
 
 - **🎯 Claude Code-like Interface** - Familiar commands for development tasks
-- **⚡ Fast & Efficient** - No thinking tokens, direct responses from Qwen2.5
+- **⚡ Fast & Efficient** - No thinking tokens, direct responses from Qwen3-235B
+- **🆓 Completely FREE** - Qwen3-235B is free on OpenRouter with unlimited usage!
+- **🚀 Most Advanced** - 235B parameters, 3x larger than previous generation
 - **🛠️ Comprehensive Tools** - Project setup, code analysis, testing, docs, refactoring
 - **💬 Interactive Mode** - Chat-like interface for development assistance
 - **📁 Project Management** - Create and manage different project types
 - **🔧 Auto-execution** - Automatically creates files and runs tasks
+- **🔄 Model Switching** - Switch between Qwen models on the fly
 
 ## Quick Start
 
@@ -40,10 +43,14 @@ export OPENROUTER_API_KEY="your-api-key-here"
 # Interactive mode (recommended for first use)
 python qwen_devr_cli.py --interactive
 
-# Quick commands
+# Quick commands (defaults to FREE Qwen3-235B!)
 python qwen_devr_cli.py "analyze this codebase"
 python qwen_devr_cli.py --setup web my_app
 python qwen_devr_cli.py --file main.py "add error handling"
+
+# Use specific models
+python qwen_devr_cli.py --model qwen3-235b "create a FastAPI app"  # FREE!
+python qwen_devr_cli.py --model qwen2.5-coder "optimize this code"  # Coding specialist
 ```
 
 ## Usage Examples
@@ -157,22 +164,33 @@ qwen_workspace/
 └── backups/          # File backups
 ```
 
-## Why Qwen2.5-72B-Instruct?
+## 🎉 NEW: Why Qwen3-235B?
 
-- **🚀 Fast**: No thinking tokens like DeepSeek, direct responses
-- **🎯 Accurate**: Excellent for code generation and analysis
-- **💰 Cost-effective**: Competitive pricing on OpenRouter
-- **🔧 Practical**: Great balance of capability and speed for development
-- **📦 Reliable**: Stable, consistent responses without hallucination
+- **🆓 COMPLETELY FREE**: Zero cost on OpenRouter with unlimited usage!
+- **🚀 Most Advanced**: 235B parameters, 3x larger than Qwen2.5-72B
+- **⚡ Lightning Fast**: No thinking tokens like DeepSeek, direct responses
+- **🎯 Superior Quality**: Significantly improved capabilities over previous generation
+- **🔧 Perfect for Development**: Excellent for code generation, analysis, and complex tasks
+- **📦 Production Ready**: Stable, consistent responses without hallucination
 
-## Comparison vs Other Models
+## Model Comparison
 
-| Model | Speed | Code Quality | Thinking Tokens | Cost |
-|-------|-------|--------------|----------------|------|
-| **Qwen2.5-72B** | ⚡⚡⚡ | 🎯🎯🎯 | ✅ None | 💰💰 |
-| DeepSeek-R1 | ⚡ | 🎯🎯🎯🎯 | ❌ Verbose | 💰 |
-| Claude-3.5-Sonnet | ⚡⚡ | 🎯🎯🎯🎯 | ✅ None | 💰💰💰 |
-| GPT-4o | ⚡⚡ | 🎯🎯🎯 | ✅ None | 💰💰💰 |
+| Model | Parameters | Speed | Code Quality | Thinking Tokens | Cost |
+|-------|------------|-------|--------------|----------------|------|
+| **🆕 Qwen3-235B** | 235B | ⚡⚡⚡⚡ | 🎯🎯🎯🎯🎯 | ✅ None | 🆓 **FREE!** |
+| Qwen2.5-72B | 72B | ⚡⚡⚡⚡⚡ | 🎯🎯🎯🎯 | ✅ None | 💰💰 |
+| Qwen2.5-Coder | 32B | ⚡⚡⚡⚡⚡ | 🎯🎯🎯🎯 | ✅ None | 💰 |
+| DeepSeek-R1 | 671B | ⚡ | 🎯🎯🎯🎯🎯 | ❌ Verbose | 💰 |
+| Claude-3.5-Sonnet | ? | ⚡⚡ | 🎯🎯🎯🎯 | ✅ None | 💰💰💰 |
+| GPT-4o | ? | ⚡⚡ | 🎯🎯🎯 | ✅ None | 💰💰💰 |
+
+### Available Models in QwenDevr:
+
+- **qwen3-235b** - Latest, most powerful, FREE! (default)
+- **qwen2.5-72b** - Previous generation, very fast
+- **qwen2.5-coder** - Specialized for coding tasks
+
+Switch models anytime with: `models qwen3-235b`
 
 ## Integration with Other Tools
 

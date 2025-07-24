@@ -88,23 +88,32 @@ def demo_comparison():
     
     table = Table(title="🤖 Model Comparison")
     table.add_column("Model", style="cyan")
+    table.add_column("Parameters", justify="center")
     table.add_column("Speed", justify="center")
     table.add_column("Code Quality", justify="center")
     table.add_column("Thinking Tokens", justify="center")
     table.add_column("Cost", justify="center")
     
     models = [
-        ("Qwen2.5-72B", "⚡⚡⚡", "🎯🎯🎯", "✅ None", "💰💰"),
-        ("DeepSeek-R1", "⚡", "🎯🎯🎯🎯", "❌ Verbose", "💰"),
-        ("Claude-3.5", "⚡⚡", "🎯🎯🎯🎯", "✅ None", "💰💰💰"),
-        ("GPT-4o", "⚡⚡", "🎯🎯🎯", "✅ None", "💰💰💰"),
+        ("🆕 Qwen3-235B", "235B", "⚡⚡⚡⚡", "🎯🎯🎯🎯🎯", "✅ None", "🆓 FREE!"),
+        ("Qwen2.5-72B", "72B", "⚡⚡⚡⚡⚡", "🎯🎯🎯🎯", "✅ None", "💰💰"),
+        ("DeepSeek-R1", "671B", "⚡", "🎯🎯🎯🎯🎯", "❌ Verbose", "💰"),
+        ("Claude-3.5", "?", "⚡⚡", "🎯🎯🎯🎯", "✅ None", "💰💰💰"),
+        ("GPT-4o", "?", "⚡⚡", "🎯🎯🎯", "✅ None", "💰💰💰"),
     ]
     
-    for model, speed, quality, thinking, cost in models:
-        table.add_row(model, speed, quality, thinking, cost)
+    for model, params, speed, quality, thinking, cost in models:
+        table.add_row(model, params, speed, quality, thinking, cost)
     
     console.print("\n")
     console.print(table)
+    
+    # Highlight the new FREE model
+    console.print("\n🎉 [bold green]NEW: Qwen3-235B is completely FREE on OpenRouter![/bold green]")
+    console.print("• 235B parameters (3x larger than Qwen2.5-72B)")
+    console.print("• Significantly improved capabilities")
+    console.print("• Zero cost for unlimited usage")
+    console.print("• Perfect for extensive development work")
 
 def demo_workflow_examples():
     """Show example workflows."""
