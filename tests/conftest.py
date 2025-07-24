@@ -8,7 +8,7 @@ import asyncio
 from typing import AsyncGenerator, Generator
 from unittest.mock import Mock, AsyncMock
 
-from nexus import UnifiedAIWrapper, AIProvider
+from nexus import NexusConnector as UnifiedAIWrapper, AIProvider
 
 
 @pytest.fixture(scope="session")
