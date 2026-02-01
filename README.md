@@ -7,232 +7,290 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Production_Ready-brightgreen.svg)]()
 
-**The Agentic AI Toolkit - Build AI agents that work with any provider**
+**🚀 Transform any AI API into an autonomous agent that gets things done**
 
-[Features](#features) • [Installation](#installation) • [Quick Start](#quick-start) • [CLI](#cli) • [Documentation](#documentation)
+[What It Does](#what-it-does) • [Features](#features) • [Quick Start](#quick-start) • [Examples](#examples) • [Documentation](#documentation)
 
 </div>
 
 ---
 
-## Overview
+## What It Does
 
-The Nexus Connector is a production-ready toolkit for building AI agents. Unlike simple API wrappers, Nexus provides everything you need for agentic applications: a plugin system for custom tools, smart routing across providers, automatic fallback, full observability, and enterprise-grade reliability features.
+**Stop writing API wrappers. Start building agents.**
 
-**What makes Nexus different:**
-- **Agentic-first**: Built for AI agents that use tools, not just chat
-- **Provider-agnostic**: Same code works with OpenAI, Anthropic, Google, and more
-- **Observable**: See exactly what your agent is doing with hooks and logs
-- **Production-ready**: Retry logic, circuit breakers, rate limiting, metrics
+The Nexus Connector turns AI APIs into autonomous tools that can:
 
-### Key Benefits
+- 🤖 **Build entire applications** — "Create a Flask API with user auth and tests"
+- 📁 **Manage your codebase** — Read, write, refactor, and organize files
+- 🔄 **Execute multi-step tasks** — Keep working until the job is done
+- 🛡️ **Self-correct errors** — Hit an error? It fixes it and continues
+- 🔌 **Use any tool you give it** — Databases, APIs, Slack, GitHub, anything
 
-| Feature | Description |
-|---------|-------------|
-| **Plugin System** | Create custom tools with `@tool` decorator |
-| **Smart Routing** | Route tasks by type (code → Claude, math → GPT-4) |
-| **Automatic Fallback** | Failed provider? Automatically try the next one |
-| **Full Observability** | Hooks for every tool call, execution logs, metrics |
-| **Human-in-the-Loop** | Pause before destructive operations |
-| **MCP Support** | Connect to any MCP tool server |
-| **CLI Included** | `nexus chat` and `nexus run` out of the box |
-| **Production Hardening** | Retry, circuit breaker, rate limiting |
+```python
+# This isn't a chatbot. This is an autonomous agent.
+result = await connector.execute_task(
+    "Create a REST API with user authentication, write tests, and set up the database"
+)
 
-## Features
+print(f"✅ Created {len(result.files_created)} files")
+print(f"🔧 Made {result.iterations} tool calls")
+print(f"💰 Cost: ${result.cost:.4f}")
+```
 
-### Supported Providers
+### Why Nexus?
 
-| Provider | Models | Tool Support | Streaming |
-|----------|--------|--------------|-----------|
-| OpenAI | GPT-4o, GPT-4, GPT-3.5 | ✅ Native | ✅ |
-| Anthropic | Claude 3.5/3 Opus, Sonnet, Haiku | ✅ Native | ✅ |
-| Google | Gemini 2.0, 1.5 Pro/Flash | ✅ | ✅ |
-| xAI | Grok-3, Grok-2 | ✅ Native | ✅ |
-| DeepSeek | DeepSeek-V3, Coder | ✅ Native | ✅ |
-| Ollama | Any local LLM | ✅ Native | ✅ |
+| Problem | Nexus Solution |
+|---------|----------------|
+| 🔒 Locked into one AI provider | **6 providers, same code** — switch with one line |
+| 📝 Managing conversation state | **Automatic session management** — it just works |
+| 🛠️ Building tool integrations | **`@tool` decorator** — 3 lines to add any capability |
+| 💥 API failures kill your workflow | **Auto-fallback** — seamlessly switch providers on error |
+| 🔍 No idea what the AI is doing | **Full observability** — hooks into every action |
+| 🏭 Not ready for production | **Circuit breakers, rate limits, metrics** — enterprise-ready |
 
-### Plugin System
+---
 
-Create custom tools with the `@tool` decorator:
+## 🎯 Real Examples
+
+### Build a Complete Project
+
+```python
+result = await connector.execute_task("""
+    Create a blog application with:
+    - SQLite database with posts and comments
+    - Flask REST API with CRUD endpoints
+    - Input validation and error handling
+    - Unit tests for all endpoints
+    - README with setup instructions
+""")
+# ✅ 12 files created, 47 tool calls, $0.08 cost
+```
+
+### Refactor with Confidence
+
+```python
+result = await connector.execute_task(
+    "Refactor the auth module to use JWT tokens instead of sessions",
+    checkpoint=True,        # Git commit before changes
+    rollback_on_fail=True,  # Revert if something breaks
+    confirm_destructive=True,  # Ask before deleting files
+)
+```
+
+### Add Custom Capabilities
 
 ```python
 from nexus import NexusConnector, tool
 
-@tool(description="Search our documentation")
-async def search_docs(query: str, max_results: int = 5) -> str:
-    results = await my_search_engine.search(query, limit=max_results)
-    return format_results(results)
+@tool(description="Query our production database")
+async def query_db(sql: str) -> str:
+    return await database.execute(sql)
 
-@tool(description="Send a Slack message", destructive=True)
-async def send_slack(channel: str, message: str) -> str:
-    return await slack.post_message(channel, message)
+@tool(description="Send alert to Slack")
+async def alert_slack(message: str) -> str:
+    return await slack.post("#alerts", message)
 
-# Tools are automatically available to the AI
+@tool(description="Deploy to production", destructive=True)
+async def deploy(version: str) -> str:
+    return await k8s.deploy(version)
+
 connector = NexusConnector(
-    provider="openai",
-    api_key=api_key,
-    tools=[search_docs, send_slack],
+    provider="anthropic",
+    tools=[query_db, alert_slack, deploy],
+)
+
+# Now the AI can query your database, alert your team, and deploy code
+await connector.execute_task(
+    "Check if error rates are above 1%, if so alert the team and rollback to v2.3.1"
 )
 ```
 
-### Smart Routing
-
-Route tasks to the best provider automatically:
+### Smart Provider Routing
 
 ```python
-# Auto-configure from environment variables
-connector = NexusConnector(router="auto")
-
-# Or define routing rules
 connector = NexusConnector(
     router="auto",
     routing_rules={
-        "code": "anthropic",    # Claude for code
-        "math": "openai",       # GPT-4 for math
+        "code": "anthropic",     # Claude for coding tasks
+        "math": "openai",        # GPT-4 for math/logic
         "creative": "anthropic", # Claude for writing
-        "bulk": "deepseek",     # DeepSeek for cost
-    }
+        "bulk": "deepseek",      # DeepSeek for cost-sensitive work
+        "private": "ollama",     # Local model for sensitive data
+    },
+    fallback_enabled=True,  # If one fails, try the next
 )
 
-# Routing strategies
-connector = NexusConnector(router="cost")      # Cheapest provider
-connector = NexusConnector(router="quality")   # Best for task type
-connector = NexusConnector(router="latency")   # Fastest provider
-connector = NexusConnector(router="adaptive")  # Balances all factors
+# Nexus picks the right provider for each task automatically
 ```
 
-### Observable Execution
+---
+
+## Features
+
+### 🔌 Supported Providers
+
+| Provider | Models | Tool Calling | Streaming | Local |
+|----------|--------|:------------:|:---------:|:-----:|
+| **OpenAI** | GPT-4o, GPT-4, GPT-3.5 | ✅ | ✅ | ❌ |
+| **Anthropic** | Claude 3.5 Opus/Sonnet/Haiku | ✅ | ✅ | ❌ |
+| **Google** | Gemini 2.0, 1.5 Pro/Flash | ✅ | ✅ | ❌ |
+| **xAI** | Grok-3, Grok-2 | ✅ | ✅ | ❌ |
+| **DeepSeek** | DeepSeek-V3, Coder | ✅ | ✅ | ❌ |
+| **Ollama** | Llama, Mistral, CodeLlama, any | ✅ | ✅ | ✅ |
+
+### 🛠️ Plugin System
+
+Turn any function into an AI-callable tool:
+
+```python
+from nexus import tool
+
+@tool(description="Search our documentation")
+async def search_docs(query: str, max_results: int = 5) -> str:
+    results = await doc_search.search(query, limit=max_results)
+    return format_results(results)
+
+@tool(description="Create a GitHub issue", category="github")
+async def create_issue(title: str, body: str, labels: list = None) -> str:
+    return await github.create_issue(title, body, labels)
+
+@tool(description="Send email to customer", destructive=True)
+async def send_email(to: str, subject: str, body: str) -> str:
+    return await email.send(to, subject, body)
+```
+
+The `destructive=True` flag enables human-in-the-loop confirmation before execution.
+
+### 🔍 Observable Execution
 
 See exactly what your agent is doing:
 
 ```python
 connector = NexusConnector(
-    provider="openai",
-    api_key=api_key,
-    # Hooks for full visibility
-    on_tool_call=lambda tc: print(f"Calling: {tc['name']}"),
-    on_tool_result=lambda tr: print(f"Result: {tr['result']}"),
-    on_step=lambda step, status: print(f"Step {step}: {status}"),
-    on_error=lambda e: logger.error(f"Error: {e}"),
-    on_provider_switch=lambda old, new, reason: print(f"Switched: {old} → {new}"),
+    provider="anthropic",
+    on_tool_call=lambda tc: print(f"🔧 Calling: {tc['name']}({tc['args']})"),
+    on_tool_result=lambda tr: print(f"✅ Result: {tr['result'][:100]}..."),
+    on_step=lambda step, status: print(f"📍 Step {step}: {status}"),
+    on_error=lambda e: print(f"❌ Error: {e}"),
+    on_provider_switch=lambda old, new, reason: print(f"🔄 {old} → {new}: {reason}"),
 )
 
-# Execute with detailed logging
 result = await connector.execute_task(
-    "Refactor the auth module",
-    log_path="execution_log.json",  # Save detailed log
+    "Analyze the codebase and create documentation",
+    log_path="execution_log.json",  # Save detailed execution log
 )
 
-# Access execution metrics
-print(result.execution_log.get_metrics())
+# Access metrics after execution
+metrics = result.execution_log.get_metrics()
+print(f"Tool calls: {metrics['tool_calls']}")
+print(f"Tokens: {metrics['total_tokens']}")
+print(f"Duration: {metrics['duration_seconds']}s")
 ```
 
-### Human-in-the-Loop
+### 🛡️ Human-in-the-Loop
 
-Control when to pause for confirmation:
+Stay in control of dangerous operations:
 
 ```python
-def confirm_callback(tool_metadata):
-    print(f"Tool: {tool_metadata.name}")
-    print(f"Destructive: {tool_metadata.is_destructive}")
-    return input("Proceed? [y/N]: ").lower() == 'y'
+def confirm(tool_meta):
+    print(f"⚠️  Agent wants to: {tool_meta.name}")
+    print(f"   Arguments: {tool_meta.args}")
+    return input("Allow? [y/N]: ").lower() == 'y'
 
 result = await connector.execute_task(
-    "Clean up old log files",
-    confirm_destructive=True,  # Pause before delete/rm operations
-    confirm_callback=confirm_callback,
-)
-
-# Or confirm before every tool call
-result = await connector.execute_task(
-    "Refactor codebase",
-    confirm_all=True,
-)
-
-# Git checkpoint for safety
-result = await connector.execute_task(
-    "Major refactoring",
-    checkpoint=True,        # Git commit before changes
-    rollback_on_fail=True,  # Revert if task fails
+    "Clean up the database and remove old user accounts",
+    confirm_destructive=True,  # Pause before delete operations
+    confirm_callback=confirm,
 )
 ```
 
-### MCP Support
+### 🔗 MCP Server Integration
 
-Connect to MCP (Model Context Protocol) servers:
+Connect to [Model Context Protocol](https://modelcontextprotocol.io/) servers:
 
 ```python
-# Connect to well-known MCP servers
 connector = NexusConnector(
     provider="openai",
-    api_key=api_key,
-    mcp_servers=["filesystem", "github", "memory"],
+    mcp_servers=["filesystem", "github", "postgres", "slack"],
 )
 
-# MCP tools available alongside custom tools
+# MCP tools are automatically available to the AI
 print(connector.get_mcp_tools())
-# ['mcp_filesystem_read_file', 'mcp_filesystem_write_file', ...]
+# ['mcp_filesystem_read_file', 'mcp_github_create_pr', 'mcp_postgres_query', ...]
 
 # Add servers dynamically
-await connector.add_mcp_server("postgres")
+await connector.add_mcp_server("memory")
 await connector.add_mcp_server("custom", config={
     "command": "python",
-    "args": ["-m", "my_mcp_server"],
+    "args": ["-m", "my_custom_mcp_server"],
 })
 ```
 
-Supported MCP servers: `filesystem`, `github`, `postgres`, `sqlite`, `memory`, `fetch`, `time`, `brave-search`, `puppeteer`, `slack`
+**Supported MCP servers:** `filesystem`, `github`, `postgres`, `sqlite`, `memory`, `fetch`, `time`, `brave-search`, `puppeteer`, `slack`
 
-### Production Hardening
+### 🚀 Smart Routing & Fallback
 
-Enterprise-ready reliability:
+Never let a provider outage stop your workflow:
 
 ```python
-from nexus import RETRY_CONFIGS, get_rate_limiter, get_metrics
+connector = NexusConnector(
+    router="adaptive",  # Learns which provider works best
+    fallback_enabled=True,
+    max_fallback_attempts=3,
+)
 
-# Pre-configured retry strategies
-# "aggressive", "standard", "conservative", "rate_limit"
+# Routing strategies:
+# - "cost"     → Cheapest provider (DeepSeek, Ollama)
+# - "quality"  → Best for the task type
+# - "latency"  → Fastest based on recent history
+# - "fallback" → Try providers in priority order
+# - "adaptive" → Balances cost, quality, and reliability
+```
+
+### 🏭 Production Hardening
+
+Enterprise-ready reliability out of the box:
+
+```python
+from nexus import (
+    RETRY_CONFIGS,      # Pre-configured retry strategies
+    CircuitBreaker,     # Prevent cascade failures
+    get_rate_limiter,   # Token bucket rate limiting
+    get_metrics,        # Prometheus metrics
+    get_tracer,         # Distributed tracing
+)
+from nexus.web import RedisSessionStore  # Distributed sessions
+
+# Exponential backoff with jitter
 handler = RetryHandler(config=RETRY_CONFIGS["standard"])
+# Options: "aggressive", "standard", "conservative", "rate_limit"
+
+# Circuit breaker prevents hammering a dead service
+cb = CircuitBreaker("openai", failure_threshold=5, timeout=30.0)
 
 # Rate limiting per provider
 limiter = get_rate_limiter("openai")
 await limiter.acquire_request(timeout=30)
 
-# Prometheus metrics
+# Prometheus metrics for monitoring
 metrics = get_metrics()
-await metrics.record_request(
-    provider="openai",
-    success=True,
-    duration_seconds=1.5,
-    input_tokens=100,
-    output_tokens=500,
-)
 print(metrics.get_prometheus_metrics())
 
-# Circuit breaker
-from nexus import CircuitBreaker
-cb = CircuitBreaker("openai", config=CircuitBreakerConfig(
-    failure_threshold=5,
-    timeout=30.0,
-))
-
-# Redis distributed sessions
-from nexus.web import RedisSessionStore
+# Redis sessions for horizontal scaling
 store = RedisSessionStore(redis_url="redis://localhost:6379")
 ```
 
-## Installation
+---
+
+## Quick Start
+
+### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/Clark-Wallace/The-Nexus-Connector.git
 cd The-Nexus-Connector
-
-# Install in development mode
 pip install -e .
-
-# Or install dependencies directly
-pip install -r requirements.txt
 ```
 
 ### Environment Variables
@@ -245,44 +303,7 @@ export XAI_API_KEY="..."
 export DEEPSEEK_API_KEY="..."
 ```
 
-## CLI
-
-Nexus includes a powerful command-line interface:
-
-```bash
-# Interactive chat
-nexus chat --provider openai
-nexus chat --provider anthropic --model claude-sonnet-4-20250514
-
-# One-shot task execution
-nexus run "Create a Python function to sort a list" --provider openai
-
-# Compare providers
-nexus compare "Explain recursion" --providers openai,anthropic,deepseek
-
-# Start web server
-nexus serve --port 8000
-
-# List providers and tools
-nexus providers
-nexus tools
-```
-
-### Interactive Chat Commands
-
-```
-/help     - Show available commands
-/clear    - Clear conversation history
-/save     - Save conversation to file
-/switch   - Switch provider
-/model    - Change model
-/system   - Set system prompt
-/tokens   - Show token usage
-```
-
-## Quick Start
-
-### Basic Usage
+### Your First Agent
 
 ```python
 import asyncio
@@ -290,133 +311,119 @@ from nexus import NexusConnector
 
 async def main():
     connector = NexusConnector(
-        provider="openai",
-        api_key="your-api-key"
+        provider="anthropic",
+        api_key="your-api-key",
+        workspace="./my_project",  # Where to create files
     )
 
-    response = await connector.send_message("Hello!")
+    # Simple message
+    response = await connector.send_message("What can you help me build?")
     print(response["content"])
+
+    # Autonomous task execution
+    result = await connector.execute_task(
+        "Create a Python CLI tool that converts CSV files to JSON",
+        show_progress=True,
+    )
+
+    print(f"✅ Success: {result.success}")
+    print(f"📁 Files: {result.files_created}")
 
 asyncio.run(main())
 ```
 
-### With Custom Tools
+---
 
-```python
-from nexus import NexusConnector, tool
+## CLI
 
-@tool(description="Get weather for a city")
-async def get_weather(city: str) -> str:
-    return f"Weather in {city}: 72°F, Sunny"
+Nexus includes a powerful command-line interface:
 
-async def main():
-    connector = NexusConnector(
-        provider="openai",
-        api_key="your-api-key",
-        tools=[get_weather],
-    )
+```bash
+# Interactive chat with any provider
+nexus chat --provider anthropic
+nexus chat --provider openai --model gpt-4o
 
-    response = await connector.send_message(
-        "What's the weather in San Francisco?"
-    )
-    print(response["content"])
+# Execute a task and get results
+nexus run "Create a Python script that monitors CPU usage" --provider anthropic
+
+# Compare providers side-by-side
+nexus compare "Explain quantum computing" --providers openai,anthropic,deepseek
+
+# Start a web server
+nexus serve --port 8000
+
+# List available providers and tools
+nexus providers
+nexus tools
 ```
 
-### With Smart Routing
+### Chat Commands
 
-```python
-from nexus import NexusConnector
-
-async def main():
-    # Auto-configure from environment, with fallback
-    connector = NexusConnector(
-        router="auto",
-        routing_rules={"code": "anthropic", "math": "openai"},
-        fallback_enabled=True,
-    )
-
-    # Router selects best provider for each task
-    response = await connector.send_message(
-        "Write a Python function to calculate fibonacci"
-    )
-    print(f"Provider used: {response['provider']}")
+```
+/help     Show available commands
+/clear    Clear conversation history
+/save     Save conversation to file
+/switch   Switch to different provider
+/model    Change the model
+/system   Set system prompt
+/tokens   Show token usage
 ```
 
-### Task Execution
+---
 
-```python
-from nexus import NexusConnector
+## Examples
 
-async def main():
-    connector = NexusConnector(
-        provider="anthropic",
-        api_key="your-api-key",
-        workspace="./my_project",
-    )
+The `examples/` directory has everything you need:
 
-    result = await connector.execute_task(
-        "Create a REST API with Flask that has CRUD endpoints for users",
-        show_progress=True,
-        confirm_destructive=True,
-    )
+| Example | What It Shows |
+|---------|---------------|
+| `simple_message.py` | Basic message sending |
+| `task_execution.py` | Multi-step autonomous tasks |
+| `custom_tools_example.py` | Creating tools with `@tool` |
+| `observable_execution_example.py` | Hooks and execution logging |
+| `mcp_example.py` | MCP server integration |
+| `smart_routing_example.py` | Provider routing and fallback |
+| `production_hardening_example.py` | Retry, rate limiting, metrics |
+| `multi_provider_example.py` | Comparing providers |
+| `web_server_example.py` | FastAPI deployment |
 
-    print(f"Success: {result.success}")
-    print(f"Files created: {result.files_created}")
-    print(f"Iterations: {result.iterations}")
-    print(f"Tokens used: {result.tokens_used}")
+```bash
+# Run any example
+python examples/task_execution.py
+python examples/custom_tools_example.py
 ```
+
+---
 
 ## Architecture
 
 ```
 nexus/
 ├── core/
-│   ├── unified_wrapper.py   # Main NexusConnector class
-│   ├── tool_registry.py     # @tool decorator and registry
-│   ├── tool_executor.py     # Tool execution engine
-│   ├── execution_log.py     # Structured execution logging
-│   ├── mcp_client.py        # MCP server integration
-│   ├── router.py            # Smart routing and fallback
-│   ├── retry.py             # Retry logic and circuit breaker
-│   ├── rate_limiter.py      # Rate limiting
-│   └── metrics.py           # Prometheus metrics and tracing
-├── connectors/
+│   ├── unified_wrapper.py   # 🎯 Main NexusConnector class
+│   ├── tool_registry.py     # 🔧 @tool decorator and registry
+│   ├── tool_executor.py     # ⚡ Tool execution engine
+│   ├── execution_log.py     # 📊 Structured logging
+│   ├── mcp_client.py        # 🔗 MCP server integration
+│   ├── router.py            # 🧭 Smart routing and fallback
+│   ├── retry.py             # 🔄 Retry and circuit breaker
+│   ├── rate_limiter.py      # 🚦 Rate limiting
+│   └── metrics.py           # 📈 Prometheus metrics
+├── connectors/              # Provider implementations
 │   ├── openai_connector.py
 │   ├── anthropic_connector.py
 │   ├── google_connector.py
 │   ├── deepseek_connector.py
 │   ├── xai_connector.py
 │   └── ollama_connector.py
-├── web/
+├── web/                     # Web server components
 │   ├── web_connector.py     # FastAPI integration
 │   ├── session_store.py     # In-memory sessions
 │   └── redis_store.py       # Distributed sessions
-├── cli.py                   # CLI entry point
-└── utils/
-    ├── logger.py
-    └── tokens.py            # Token counting
+└── cli.py                   # CLI entry point
 ```
 
-## Examples
-
-The `examples/` directory contains comprehensive examples:
-
-| Example | Description |
-|---------|-------------|
-| `simple_message.py` | Basic message sending |
-| `multi_provider_example.py` | Compare providers |
-| `custom_tools_example.py` | `@tool` decorator usage |
-| `observable_execution_example.py` | Hooks and logging |
-| `mcp_example.py` | MCP server integration |
-| `smart_routing_example.py` | Routing and fallback |
-| `production_hardening_example.py` | Retry, rate limiting, metrics |
-| `task_execution.py` | Multi-step task execution |
-| `web_server_example.py` | FastAPI deployment |
-
-Run any example:
-```bash
-python examples/custom_tools_example.py
-```
+---
 
 ## API Reference
 
@@ -424,34 +431,31 @@ python examples/custom_tools_example.py
 
 ```python
 connector = NexusConnector(
-    # Provider configuration
-    provider="openai",              # or AIProvider.OPENAI
+    # Provider
+    provider="anthropic",           # or "openai", "google", "deepseek", "xai", "ollama"
     api_key="...",
-    model="gpt-4o",
+    model="claude-sonnet-4-20250514",
 
-    # Workspace
+    # Workspace for file operations
     workspace="./project",
 
-    # Execution settings
-    max_iterations=10,
-    auto_execute=True,
-    safe_mode=True,
-    verbose=False,
+    # Execution behavior
+    max_iterations=10,              # Max tool-use loops
+    auto_execute=True,              # Auto-run tool calls
+    safe_mode=True,                 # Restrict dangerous operations
 
     # Custom tools
-    tools=[my_tool1, my_tool2],
+    tools=[my_func1, my_func2],     # Functions with @tool decorator
 
     # MCP servers
     mcp_servers=["filesystem", "github"],
 
     # Smart routing
-    router="auto",                   # or Router instance
-    routing_rules={"code": "anthropic"},
+    router="auto",                  # or "cost", "quality", "latency", "adaptive"
+    routing_rules={"code": "anthropic", "math": "openai"},
     fallback_enabled=True,
-    max_fallback_attempts=3,
 
     # Observability hooks
-    on_message=lambda msg: ...,
     on_tool_call=lambda tc: ...,
     on_tool_result=lambda tr: ...,
     on_step=lambda step, status: ...,
@@ -460,94 +464,85 @@ connector = NexusConnector(
 )
 ```
 
-### Methods
+### Key Methods
 
 | Method | Description |
 |--------|-------------|
-| `send_message(msg)` | Send message and get response |
-| `execute_task(task)` | Execute multi-step task |
-| `register_tool(func)` | Register a custom tool |
-| `register_tools([...])` | Register multiple tools |
-| `get_tools()` | Get all registered tools |
-| `add_mcp_server(name)` | Add MCP server |
-| `remove_mcp_server(name)` | Remove MCP server |
-| `get_mcp_status()` | Get MCP server status |
-| `clear_history()` | Clear conversation |
-| `close()` | Close all connections |
+| `send_message(msg)` | Send a message, get a response |
+| `execute_task(task)` | Run autonomous multi-step task |
+| `register_tool(func)` | Add a custom tool |
+| `add_mcp_server(name)` | Connect to MCP server |
+| `clear_history()` | Reset conversation |
+| `close()` | Clean up connections |
 
 ### TaskResult
 
 ```python
-result = await connector.execute_task("...")
+result = await connector.execute_task("Build a web scraper")
 
-result.success          # bool
-result.content          # str - AI responses
-result.iterations       # int - loop iterations
-result.tokens_used      # int - total tokens
-result.duration         # float - seconds
-result.cost             # float - estimated cost
-result.files_created    # List[str]
-result.files_modified   # List[str]
-result.execution_log    # ExecutionLog object
+result.success          # bool - Did it complete successfully?
+result.content          # str - Final AI response
+result.iterations       # int - How many tool-use loops
+result.tokens_used      # int - Total tokens consumed
+result.cost             # float - Estimated cost in USD
+result.files_created    # List[str] - New files made
+result.files_modified   # List[str] - Existing files changed
+result.execution_log    # ExecutionLog - Detailed execution data
 ```
+
+---
 
 ## Roadmap
 
-### ✅ Completed
+### ✅ Shipped
 
-- [x] Core unified interface (6 providers)
-- [x] Plugin system (`@tool` decorator)
-- [x] CLI tool (`nexus chat`, `nexus run`)
-- [x] Observable execution (hooks, logs)
-- [x] Human-in-the-loop confirmation
-- [x] MCP server integration
-- [x] Smart routing (7 strategies)
-- [x] Automatic fallback
-- [x] Retry with exponential backoff
-- [x] Circuit breaker pattern
-- [x] Rate limiting
-- [x] Prometheus metrics
-- [x] Distributed tracing
-- [x] Redis session store
-- [x] Web server with auth
+- [x] **6 AI providers** — OpenAI, Anthropic, Google, xAI, DeepSeek, Ollama
+- [x] **Plugin system** — `@tool` decorator for custom capabilities
+- [x] **CLI tool** — `nexus chat`, `nexus run`, `nexus compare`
+- [x] **Observable execution** — Hooks, logs, metrics for everything
+- [x] **Human-in-the-loop** — Confirm before destructive operations
+- [x] **MCP integration** — Connect to any MCP tool server
+- [x] **Smart routing** — 7 strategies, automatic fallback
+- [x] **Production hardening** — Retry, circuit breaker, rate limiting
+- [x] **Distributed sessions** — Redis session store
+- [x] **Prometheus metrics** — Full observability stack
+- [x] **Web server** — FastAPI with auth middleware
 
-### 🔮 Future
+### 🔮 Coming Soon
 
-- [ ] Additional providers (Cohere, Mistral)
-- [ ] Response caching
+- [ ] More providers (Cohere, Mistral, AWS Bedrock)
+- [ ] Response caching layer
 - [ ] Web UI dashboard
 - [ ] Docker images
 - [ ] Kubernetes manifests
+- [ ] VS Code extension
+
+---
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md).
+We'd love your help! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```bash
-# Development setup
 git clone https://github.com/Clark-Wallace/The-Nexus-Connector.git
 cd The-Nexus-Connector
 pip install -e ".[dev]"
 pre-commit install
-
-# Run tests
 pytest
-pytest --cov=nexus
 ```
+
+---
 
 ## License
 
-MIT License - see [LICENSE](LICENSE)
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/Clark-Wallace/The-Nexus-Connector/issues)
-- **Docs**: [examples/](./examples/)
+MIT License — see [LICENSE](LICENSE)
 
 ---
 
 <div align="center">
 
-**Build AI agents, not API integrations.**
+### 🚀 Stop writing API wrappers. Start building agents.
+
+**[Get Started](#quick-start)** • **[Examples](./examples/)** • **[Report Issue](https://github.com/Clark-Wallace/The-Nexus-Connector/issues)**
 
 </div>
