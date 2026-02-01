@@ -330,6 +330,119 @@ print(metrics.get_prometheus_metrics())
 store = RedisSessionStore(redis_url="redis://localhost:6379")
 ```
 
+### ⚡ Streaming Responses
+
+Get responses as they're generated:
+
+```python
+# Stream tokens as they arrive
+async for chunk in connector.stream_message("Write a story about AI"):
+    print(chunk, end="", flush=True)
+
+# Works with any provider
+connector = NexusConnector(provider="anthropic")
+async for chunk in connector.stream_message("Explain quantum computing"):
+    process_chunk(chunk)
+```
+
+### 🎮 Game Master Mode
+
+Built-in RPG game management with narrative AI:
+
+```python
+from nexus.connectors import GMConnector
+
+# Specialized connector for tabletop RPGs
+gm = GMConnector(
+    provider="anthropic",
+    api_key="your-key",
+    game_system="D&D 5e"
+)
+
+response = await gm.process_action({
+    "session_id": "campaign_42",
+    "player_action": {"text": "I search the ancient ruins for traps"},
+    "game_state": {
+        "scene": "crumbling_temple",
+        "location": "Chamber of Echoes"
+    },
+    "character": {
+        "name": "Lyralei",
+        "class": "Ranger",
+        "level": 7
+    }
+})
+
+# Rich structured response
+print(response.narrative)
+# "As you carefully examine the moss-covered stones, your trained
+#  eyes catch a glint of metal hidden beneath the debris..."
+
+print(response.suggested_actions)
+# [
+#   {"key": "A", "emoji": "🔍", "text": "Investigate the metal glint"},
+#   {"key": "B", "emoji": "🛡️", "text": "Proceed with caution"},
+#   {"key": "C", "emoji": "⚠️", "text": "Warn the party"},
+#   {"key": "D", "emoji": "🏃", "text": "Back away slowly"}
+# ]
+
+print(response.requires_roll)
+# {"dice": "1d20", "skill": "Investigation", "dc": 15}
+```
+
+### 🏠 Local AI with Ollama
+
+Run AI completely locally — no internet, no API costs, full privacy:
+
+```python
+# Use any model from Ollama's library
+connector = NexusConnector(
+    provider="ollama",
+    model="llama3.3:70b",  # Or codellama, mistral, etc.
+    base_url="http://localhost:11434"
+)
+
+# Same interface, runs 100% locally
+response = await connector.send_message("Analyze this sensitive document...")
+
+# Great for:
+# - Sensitive data that can't leave your network
+# - Offline environments
+# - Cost-conscious bulk operations
+# - Development and testing
+```
+
+### 🔧 Custom Connectors
+
+Add support for any AI provider:
+
+```python
+from nexus.core.base_connector import BaseConnector, Response
+
+class MyCustomConnector(BaseConnector):
+    """Add support for any AI API."""
+
+    async def send_message(self, messages, **kwargs):
+        # Call your provider's API
+        result = await self.client.chat(messages)
+
+        return Response(
+            content=result.text,
+            tool_calls=self._parse_tools(result),
+            usage={"total_tokens": result.token_count}
+        )
+
+    async def stream_message(self, messages, **kwargs):
+        async for chunk in self.client.stream(messages):
+            yield chunk.text
+
+# Register and use like any other provider
+connector = NexusConnector(
+    provider=MyCustomConnector,
+    api_key="your-key"
+)
+```
+
 ---
 
 ## Quick Start
@@ -518,10 +631,12 @@ connector = NexusConnector(
 | Method | Description |
 |--------|-------------|
 | `send_message(msg)` | Send a message, get a response |
+| `stream_message(msg)` | Stream response tokens as they arrive |
 | `execute_task(task)` | Run autonomous multi-step task |
 | `register_tool(func)` | Add a custom tool |
 | `add_mcp_server(name)` | Connect to MCP server |
 | `clear_history()` | Reset conversation |
+| `get_history()` | Get full conversation history |
 | `close()` | Clean up connections |
 
 ### TaskResult
@@ -547,13 +662,17 @@ result.execution_log    # ExecutionLog - Detailed execution data
 
 - [x] **6 AI providers** — OpenAI, Anthropic, Google, xAI, DeepSeek, Ollama
 - [x] **Plugin system** — `@tool` decorator for custom capabilities
+- [x] **Streaming responses** — Real-time token streaming from any provider
 - [x] **CLI tool** — `nexus chat`, `nexus run`, `nexus compare`
 - [x] **Observable execution** — Hooks, logs, metrics for everything
 - [x] **Human-in-the-loop** — Confirm before destructive operations
 - [x] **MCP integration** — Connect to any MCP tool server
 - [x] **Smart routing** — 7 strategies, automatic fallback
 - [x] **Production hardening** — Retry, circuit breaker, rate limiting
-- [x] **Distributed sessions** — Redis session store
+- [x] **Persistent sessions** — In-memory and Redis distributed sessions
+- [x] **Game Master mode** — RPG connector with narrative AI
+- [x] **Local AI support** — Ollama for private, offline operation
+- [x] **Custom connectors** — Extensible architecture for new providers
 - [x] **Prometheus metrics** — Full observability stack
 - [x] **Web server** — FastAPI with auth middleware
 
