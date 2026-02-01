@@ -26,6 +26,7 @@ The Nexus Connector turns AI APIs into autonomous tools that can:
 - 🔄 **Execute multi-step tasks** — Keep working until the job is done
 - 🛡️ **Self-correct errors** — Hit an error? It fixes it and continues
 - 🔌 **Use any tool you give it** — Databases, APIs, Slack, GitHub, anything
+- 💾 **Remember everything** — Persistent sessions across requests and restarts
 
 ```python
 # This isn't a chatbot. This is an autonomous agent.
@@ -228,6 +229,54 @@ await connector.add_mcp_server("custom", config={
 ```
 
 **Supported MCP servers:** `filesystem`, `github`, `postgres`, `sqlite`, `memory`, `fetch`, `time`, `brave-search`, `puppeteer`, `slack`
+
+### 💾 Persistent Sessions
+
+Conversation context survives across requests, restarts, and even server instances:
+
+```python
+# In-memory sessions (single instance)
+from nexus.web import SessionStore
+store = SessionStore(timeout_hours=24)  # Auto-cleanup after 24h
+
+# Get or create a session - context is preserved
+wrapper = await store.get_or_create(
+    session_id="user_123",
+    factory=lambda: NexusConnector(provider="anthropic")
+)
+
+# Conversation history is maintained automatically
+await wrapper.send_message("My name is Alice")
+# ... hours later, same session ...
+await wrapper.send_message("What's my name?")  # "Your name is Alice"
+
+# Redis sessions (distributed, multi-instance)
+from nexus.web import RedisSessionStore
+store = RedisSessionStore(
+    redis_url="redis://localhost:6379",
+    prefix="nexus:session:",
+    default_ttl=86400,  # 24 hours
+)
+
+# Works across multiple server instances
+async with store:
+    session = await store.create_session(
+        session_id="user_123",
+        provider="anthropic",
+        user_id="alice",
+    )
+    await store.add_message(session.session_id, {
+        "role": "user",
+        "content": "Remember this for later"
+    })
+```
+
+**Session features:**
+- 🔄 Automatic conversation history tracking
+- ⏰ Configurable TTL with auto-cleanup
+- 🔒 Session locking for concurrent access
+- 📊 Usage stats and session metrics
+- 🌐 Redis pub/sub for real-time sync
 
 ### 🚀 Smart Routing & Fallback
 
