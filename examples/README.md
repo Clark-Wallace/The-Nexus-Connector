@@ -112,6 +112,27 @@ Routing strategies:
 - `fallback` - Priority order with retry
 - `adaptive` - Balances all factors
 
+### 10. Production Hardening (`production_hardening_example.py`) ✨ NEW
+Enterprise-ready reliability features for production deployments.
+
+```bash
+python examples/production_hardening_example.py
+```
+
+Features demonstrated:
+- Retry with exponential backoff and jitter
+- Circuit breaker pattern
+- Rate limiting (requests + tokens)
+- Prometheus metrics collection
+- Distributed tracing
+- Redis distributed sessions
+
+Pre-configured retry strategies:
+- `aggressive` - 5 retries, fast recovery
+- `standard` - 3 retries, balanced
+- `conservative` - 2 retries, cautious
+- `rate_limit` - 5 retries, long delays for rate limits
+
 ## CLI Development Tools
 
 ### 🚀 QwenDevr - The Ultimate Qwen CLI

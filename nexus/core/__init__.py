@@ -31,6 +31,34 @@ from .router import (
     TaskClassifier,
     create_router_from_env,
 )
+from .retry import (
+    RetryHandler,
+    RetryConfig,
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitOpenError,
+    RetryExhaustedError,
+    with_retry,
+    RETRY_CONFIGS,
+)
+from .rate_limiter import (
+    RateLimiter,
+    TokenBucketLimiter,
+    SlidingWindowLimiter,
+    ConcurrencyLimiter,
+    ProviderRateLimiter,
+    RateLimitConfig,
+    RateLimitExceeded,
+    get_rate_limiter,
+)
+from .metrics import (
+    MetricsCollector,
+    NexusMetrics,
+    Tracer,
+    Span,
+    get_metrics,
+    get_tracer,
+)
 
 __all__ = [
     "UnifiedAIWrapper",
@@ -66,4 +94,29 @@ __all__ = [
     "ProviderStats",
     "TaskClassifier",
     "create_router_from_env",
+    # Retry exports
+    "RetryHandler",
+    "RetryConfig",
+    "CircuitBreaker",
+    "CircuitBreakerConfig",
+    "CircuitOpenError",
+    "RetryExhaustedError",
+    "with_retry",
+    "RETRY_CONFIGS",
+    # Rate limiter exports
+    "RateLimiter",
+    "TokenBucketLimiter",
+    "SlidingWindowLimiter",
+    "ConcurrencyLimiter",
+    "ProviderRateLimiter",
+    "RateLimitConfig",
+    "RateLimitExceeded",
+    "get_rate_limiter",
+    # Metrics exports
+    "MetricsCollector",
+    "NexusMetrics",
+    "Tracer",
+    "Span",
+    "get_metrics",
+    "get_tracer",
 ]

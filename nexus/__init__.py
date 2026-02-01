@@ -16,6 +16,9 @@ from .core.exceptions import NexusError, ProviderError, ToolExecutionError
 from .core.tool_registry import tool, ToolRegistry, ToolMetadata
 from .core.mcp_client import MCPManager, MCPServerConfig, MCPError
 from .core.router import Router, RoutingStrategy, ProviderConfig, create_router_from_env
+from .core.retry import RetryConfig, CircuitBreaker, RetryHandler, RETRY_CONFIGS
+from .core.rate_limiter import RateLimitConfig, get_rate_limiter
+from .core.metrics import NexusMetrics, get_metrics, get_tracer
 
 # Web components (optional import)
 try:
@@ -42,6 +45,16 @@ try:
         "RoutingStrategy",
         "ProviderConfig",
         "create_router_from_env",
+        # Production hardening
+        "RetryConfig",
+        "CircuitBreaker",
+        "RetryHandler",
+        "RETRY_CONFIGS",
+        "RateLimitConfig",
+        "get_rate_limiter",
+        "NexusMetrics",
+        "get_metrics",
+        "get_tracer",
         # Web extensions
         "WebConnector",
         "WebEnabledWrapper",
@@ -71,4 +84,14 @@ except ImportError:
         "RoutingStrategy",
         "ProviderConfig",
         "create_router_from_env",
+        # Production hardening
+        "RetryConfig",
+        "CircuitBreaker",
+        "RetryHandler",
+        "RETRY_CONFIGS",
+        "RateLimitConfig",
+        "get_rate_limiter",
+        "NexusMetrics",
+        "get_metrics",
+        "get_tracer",
     ]
