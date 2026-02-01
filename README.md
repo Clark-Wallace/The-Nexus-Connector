@@ -9,7 +9,7 @@
 
 **🚀 Transform any AI API into an autonomous agent that gets things done**
 
-[60-Second Setup](#-60-second-setup) • [I Want To...](#-i-want-to) • [Features](#features) • [Examples](#examples)
+[60-Second Setup](#-60-second-setup) • [Web UI](#-60-second-setup) • [I Want To...](#-i-want-to) • [Features](#features)
 
 </div>
 
@@ -24,11 +24,27 @@ git clone https://github.com/Clark-Wallace/The-Nexus-Connector.git && cd The-Nex
 # 2. Add your API key to .env
 echo "ANTHROPIC_API_KEY=sk-ant-your-key" >> .env
 
-# 3. Start chatting!
-source venv/bin/activate && nexus chat
+# 3. Launch the UI!
+source venv/bin/activate && python ui.py
 ```
 
-**Or use Easy Mode in Python** (no async/await needed):
+**This opens a web UI in your browser** where you can:
+- 🔨 **Build** — Describe what you want, AI builds it
+- 💬 **Chat** — Talk to any AI provider
+- 📂 **Projects** — Browse, download, and manage saved projects
+
+<p align="center">
+<img src="https://img.shields.io/badge/No_Terminal_Required-brightgreen?style=for-the-badge" alt="No Terminal Required">
+</p>
+
+### Prefer the command line?
+
+```bash
+nexus chat                    # Interactive chat
+nexus run "Build a todo app"  # One-shot task
+```
+
+### Prefer Python?
 
 ```python
 from nexus.easy import chat, build, ask
