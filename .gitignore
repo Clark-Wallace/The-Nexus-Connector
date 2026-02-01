@@ -159,6 +159,7 @@ logs/
 
 # API Keys and secrets
 .env.*
+!.env.example
 config.ini
 secrets.yaml
 secrets.json

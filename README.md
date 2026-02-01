@@ -9,9 +9,171 @@
 
 **🚀 Transform any AI API into an autonomous agent that gets things done**
 
-[What It Does](#what-it-does) • [Features](#features) • [Quick Start](#quick-start) • [Examples](#examples) • [Documentation](#documentation)
+[60-Second Setup](#-60-second-setup) • [I Want To...](#-i-want-to) • [Features](#features) • [Examples](#examples)
 
 </div>
+
+---
+
+## ⚡ 60-Second Setup
+
+```bash
+# 1. Clone and setup (one command)
+git clone https://github.com/Clark-Wallace/The-Nexus-Connector.git && cd The-Nexus-Connector && ./setup.sh
+
+# 2. Add your API key to .env
+echo "ANTHROPIC_API_KEY=sk-ant-your-key" >> .env
+
+# 3. Start chatting!
+source venv/bin/activate && nexus chat
+```
+
+**Or use Easy Mode in Python** (no async/await needed):
+
+```python
+from nexus.easy import chat, build, ask
+
+# Just chat
+response = chat("Explain Python decorators")
+print(response)
+
+# Build something
+result = build("Create a Flask app with user login")
+print(f"Created: {result['files_created']}")
+
+# Quick question with context
+answer = ask("What's wrong?", context=my_error_message)
+```
+
+---
+
+## 🎯 I Want To...
+
+**Jump to what you need:**
+
+| I want to... | Do this |
+|--------------|---------|
+| [**Chat with AI**](#chat-with-ai) | `chat("Hello!")` |
+| [**Build an app**](#build-an-app) | `build("Create a REST API")` |
+| [**Analyze code**](#analyze-code) | `explain(my_code)` or `review(my_code)` |
+| [**Fix a bug**](#fix-a-bug) | `fix(broken_code, error=traceback)` |
+| [**Use locally (free)**](#use-locally-free) | `chat("Hi", provider="ollama")` |
+| [**Switch providers**](#switch-providers) | Change one line |
+| [**Add custom tools**](#add-custom-tools) | `@tool` decorator |
+
+### Chat with AI
+
+```python
+from nexus.easy import chat
+
+# Uses your default provider from .env
+response = chat("Write a haiku about coding")
+print(response)
+
+# Or specify a provider
+response = chat("Explain quantum computing", provider="anthropic")
+```
+
+### Build an App
+
+```python
+from nexus.easy import build
+
+# Describe what you want, it builds it
+result = build("Create a Python CLI that converts CSV to JSON")
+
+if result['success']:
+    print(f"✅ Created: {result['files_created']}")
+else:
+    print("Something went wrong")
+
+# More examples
+build("Create a Flask REST API with SQLite database")
+build("Build a web scraper for news headlines")
+build("Create a Discord bot that responds to !hello")
+```
+
+### Analyze Code
+
+```python
+from nexus.easy import explain, review, improve
+
+# Understand code
+explanation = explain("""
+def fib(n):
+    return n if n < 2 else fib(n-1) + fib(n-2)
+""")
+
+# Get a code review
+feedback = review(my_code)
+
+# Make it better
+better_code = improve(messy_code)
+```
+
+### Fix a Bug
+
+```python
+from nexus.easy import fix
+
+# Paste your broken code and error
+fixed_code = fix(
+    code=broken_code,
+    error="TypeError: 'NoneType' object is not subscriptable"
+)
+print(fixed_code)
+```
+
+### Use Locally (Free)
+
+```python
+from nexus.easy import chat
+
+# Install Ollama first: https://ollama.ai
+# Then: ollama pull llama3.3
+
+response = chat("Hello!", provider="ollama")
+# Runs 100% locally, no API costs, full privacy
+```
+
+### Switch Providers
+
+```python
+from nexus.easy import chat
+
+# Same code, different providers
+chat("Hello", provider="anthropic")  # Claude
+chat("Hello", provider="openai")     # GPT-4
+chat("Hello", provider="google")     # Gemini
+chat("Hello", provider="deepseek")   # DeepSeek
+chat("Hello", provider="ollama")     # Local (free)
+```
+
+### Add Custom Tools
+
+```python
+from nexus import NexusConnector, tool
+
+@tool(description="Search our database")
+def search_db(query: str) -> str:
+    results = database.search(query)
+    return str(results)
+
+connector = NexusConnector(provider="anthropic", tools=[search_db])
+# Now the AI can search your database!
+```
+
+---
+
+## 🔧 Common Issues
+
+| Problem | Solution |
+|---------|----------|
+| `ModuleNotFoundError: nexus` | Run `pip install -e .` or `source venv/bin/activate` |
+| `ANTHROPIC_API_KEY not set` | Add key to `.env` file or `export ANTHROPIC_API_KEY=...` |
+| `Connection refused (Ollama)` | Start Ollama: `ollama serve` and pull a model: `ollama pull llama3.3` |
+| `Rate limit exceeded` | Wait a minute, or switch providers with `provider="deepseek"` |
+| `Context length exceeded` | Your conversation is too long, call `connector.clear_history()` |
 
 ---
 
@@ -447,25 +609,56 @@ connector = NexusConnector(
 
 ## Quick Start
 
-### Installation
+### Option 1: One-Command Setup (Recommended)
 
 ```bash
 git clone https://github.com/Clark-Wallace/The-Nexus-Connector.git
 cd The-Nexus-Connector
-pip install -e .
+./setup.sh
 ```
 
-### Environment Variables
+Then edit `.env` and add your API key. Done!
+
+### Option 2: Manual Setup
 
 ```bash
-export OPENAI_API_KEY="sk-..."
-export ANTHROPIC_API_KEY="sk-ant-..."
-export GOOGLE_API_KEY="..."
-export XAI_API_KEY="..."
-export DEEPSEEK_API_KEY="..."
+git clone https://github.com/Clark-Wallace/The-Nexus-Connector.git
+cd The-Nexus-Connector
+python -m venv venv
+source venv/bin/activate
+pip install -e .
+cp .env.example .env
+# Edit .env with your API keys
 ```
 
-### Your First Agent
+### Your .env File
+
+```bash
+# Just add the providers you want to use
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+
+# Or use local AI for free
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+See `.env.example` for all options.
+
+### Easy Mode (No Async)
+
+```python
+from nexus.easy import chat, build
+
+# Chat
+response = chat("Hello!")
+print(response)
+
+# Build things
+result = build("Create a todo app with Flask")
+print(result['files_created'])
+```
+
+### Full Control (Async)
 
 ```python
 import asyncio
@@ -474,8 +667,7 @@ from nexus import NexusConnector
 async def main():
     connector = NexusConnector(
         provider="anthropic",
-        api_key="your-api-key",
-        workspace="./my_project",  # Where to create files
+        workspace="./my_project",
     )
 
     # Simple message
