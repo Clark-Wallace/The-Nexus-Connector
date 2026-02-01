@@ -13,6 +13,9 @@ from .core.unified_wrapper import UnifiedAIWrapper as NexusConnector
 from .core.base_connector import AIProvider, BaseConnector
 from .core.task_result import TaskResult
 from .core.exceptions import NexusError, ProviderError, ToolExecutionError
+from .core.tool_registry import tool, ToolRegistry, ToolMetadata
+from .core.mcp_client import MCPManager, MCPServerConfig, MCPError
+from .core.router import Router, RoutingStrategy, ProviderConfig, create_router_from_env
 
 # Web components (optional import)
 try:
@@ -26,6 +29,19 @@ try:
         "NexusError",
         "ProviderError",
         "ToolExecutionError",
+        # Tool system
+        "tool",
+        "ToolRegistry",
+        "ToolMetadata",
+        # MCP
+        "MCPManager",
+        "MCPServerConfig",
+        "MCPError",
+        # Router
+        "Router",
+        "RoutingStrategy",
+        "ProviderConfig",
+        "create_router_from_env",
         # Web extensions
         "WebConnector",
         "WebEnabledWrapper",
@@ -42,4 +58,17 @@ except ImportError:
         "NexusError",
         "ProviderError",
         "ToolExecutionError",
+        # Tool system
+        "tool",
+        "ToolRegistry",
+        "ToolMetadata",
+        # MCP
+        "MCPManager",
+        "MCPServerConfig",
+        "MCPError",
+        # Router
+        "Router",
+        "RoutingStrategy",
+        "ProviderConfig",
+        "create_router_from_env",
     ]

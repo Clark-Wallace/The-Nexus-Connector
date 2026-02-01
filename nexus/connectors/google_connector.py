@@ -10,55 +10,84 @@ from typing import Dict, Any, List, Optional, AsyncIterator
 import google.generativeai as genai
 
 from ..core.base_connector import BaseConnector, Message, Response
+from ..utils.tokens import count_tokens as tiktoken_count
 
 
 class GoogleConnector(BaseConnector):
     """
     Connector for Google's Gemini API.
-    
+
     Supports Gemini Pro, Gemini Pro Vision, and other Gemini models.
     """
-    
+
     def __init__(self, api_key: str, model: Optional[str] = None, **kwargs):
         """Initialize Google connector."""
         super().__init__(api_key, model, **kwargs)
-        
+
         # Configure the Google API
         genai.configure(api_key=self.api_key)
-        
+
         # Initialize the model
         self.client = genai.GenerativeModel(self.model)
-        
-        # Start a chat session for conversation history
-        self.chat = None
-    
+
+        # Chat session for conversation history (lazily initialized)
+        self._chat = None
+        self._chat_message_count = 0
+
     def get_default_model(self) -> str:
         """Get default model for Google."""
         return "gemini-2.0-flash"
-    
+
+    def _ensure_chat_session(self, messages: List[Message]) -> None:
+        """
+        Ensure chat session exists and is properly synchronized with messages.
+
+        The Gemini SDK maintains its own internal history, so we need to
+        reset the session when the message history changes unexpectedly.
+        """
+        # Reset chat if:
+        # 1. No chat exists yet
+        # 2. Message count decreased (history was cleared)
+        # 3. First message in a new conversation
+        should_reset = (
+            self._chat is None or
+            len(messages) < self._chat_message_count or
+            len(messages) == 1
+        )
+
+        if should_reset:
+            # Convert existing messages (except the last user message) to Gemini history format
+            history = []
+            for msg in messages[:-1]:  # Exclude the last message (will be sent separately)
+                if msg.role == "user":
+                    history.append({"role": "user", "parts": [msg.content]})
+                elif msg.role == "assistant":
+                    history.append({"role": "model", "parts": [msg.content]})
+                # Skip system and tool messages as Gemini handles them differently
+
+            self._chat = self.client.start_chat(history=history)
+
+        self._chat_message_count = len(messages)
+
+    def _get_last_user_message(self, messages: List[Message]) -> str:
+        """Extract the last user message from the conversation."""
+        for msg in reversed(messages):
+            if msg.role == "user":
+                return msg.content
+        raise ValueError("No user message found in conversation")
+
     async def send_message(
         self,
         messages: List[Message],
         **kwargs
     ) -> Response:
         """Send messages to Gemini and get response."""
-        # Convert messages to Gemini format
-        # Gemini uses a different approach - it maintains chat history internally
-        
-        # If this is a new conversation or we need to reset
-        if not self.chat or len(messages) == 1:
-            self.chat = self.client.start_chat(history=[])
-        
-        # Get the last user message (Gemini expects just the latest message)
-        last_user_message = None
-        for msg in reversed(messages):
-            if msg.role == "user":
-                last_user_message = msg.content
-                break
-        
-        if not last_user_message:
-            raise ValueError("No user message found in conversation")
-        
+        # Ensure chat session is properly initialized
+        self._ensure_chat_session(messages)
+
+        # Get the last user message
+        last_user_message = self._get_last_user_message(messages)
+
         # Configure generation parameters
         generation_config = genai.types.GenerationConfig(
             temperature=kwargs.get("temperature", 0.7),
@@ -66,35 +95,39 @@ class GoogleConnector(BaseConnector):
             top_p=kwargs.get("top_p", 1.0),
             top_k=kwargs.get("top_k", 40),
         )
-        
-        # Send message and get response
-        response = await self.chat.send_message_async(
+
+        # Send message and get response (properly awaited)
+        response = await self._chat.send_message_async(
             last_user_message,
             generation_config=generation_config
         )
-        
-        # Extract content
-        content = response.text if hasattr(response, 'text') else str(response)
-        
-        # Gemini doesn't have native function calling in the same way
-        # We'll need to implement this differently if needed
-        tool_calls = []
-        
-        # Count tokens (Gemini provides this differently)
+
+        # Extract content safely
+        content = ""
+        if hasattr(response, 'text'):
+            content = response.text
+        elif hasattr(response, 'parts') and response.parts:
+            content = "".join(part.text for part in response.parts if hasattr(part, 'text'))
+        else:
+            content = str(response)
+
+        # Gemini 2.0 supports function calling - extract if present
+        tool_calls = self.extract_tool_calls(response)
+
+        # Get token usage
         usage = {
-            "prompt_tokens": 0,  # Would need to estimate
-            "completion_tokens": 0,  # Would need to estimate
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
             "total_tokens": 0
         }
-        
-        # Try to get token counts if available
-        if hasattr(response, 'usage_metadata'):
+
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
             usage = {
                 "prompt_tokens": getattr(response.usage_metadata, 'prompt_token_count', 0),
                 "completion_tokens": getattr(response.usage_metadata, 'candidates_token_count', 0),
                 "total_tokens": getattr(response.usage_metadata, 'total_token_count', 0)
             }
-        
+
         return Response(
             content=content,
             tool_calls=tool_calls,
@@ -102,48 +135,53 @@ class GoogleConnector(BaseConnector):
             usage=usage,
             raw_response=response
         )
-    
+
     async def stream_message(
         self,
         messages: List[Message],
         **kwargs
     ) -> AsyncIterator[str]:
         """Stream response tokens as they arrive."""
+        # Ensure chat session is properly initialized
+        self._ensure_chat_session(messages)
+
         # Get the last user message
-        last_user_message = None
-        for msg in reversed(messages):
-            if msg.role == "user":
-                last_user_message = msg.content
-                break
-        
-        if not last_user_message:
-            raise ValueError("No user message found in conversation")
-        
+        last_user_message = self._get_last_user_message(messages)
+
         # Configure generation
         generation_config = genai.types.GenerationConfig(
             temperature=kwargs.get("temperature", 0.7),
             max_output_tokens=kwargs.get("max_tokens", 4096),
         )
-        
-        # Stream the response
-        response_stream = await self.chat.send_message_async(
+
+        # Stream the response (properly awaited)
+        response_stream = await self._chat.send_message_async(
             last_user_message,
             generation_config=generation_config,
             stream=True
         )
-        
+
+        # Iterate over the async stream
         async for chunk in response_stream:
-            if chunk.text:
+            if hasattr(chunk, 'text') and chunk.text:
                 yield chunk.text
+            elif hasattr(chunk, 'parts'):
+                for part in chunk.parts:
+                    if hasattr(part, 'text') and part.text:
+                        yield part.text
     
     def count_tokens(self, text: str) -> int:
-        """Count tokens using Gemini's token counter."""
+        """
+        Count tokens using Gemini's native token counter.
+
+        Falls back to tiktoken approximation if native counting fails.
+        """
         try:
-            # Use Gemini's built-in token counting
+            # Use Gemini's built-in token counting (most accurate)
             return self.client.count_tokens(text).total_tokens
-        except:
-            # Fallback to estimation
-            return len(text) // 4
+        except Exception:
+            # Fallback to tiktoken-based estimation
+            return tiktoken_count(text, self.model)
     
     def supports_tools(self) -> bool:
         """Gemini has limited tool/function support compared to OpenAI."""

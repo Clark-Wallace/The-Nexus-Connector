@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus WebSocket Chat Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .chat-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            text-align: right;
+        }
+        .ai-message {
+            background-color: #f5f5f5;
+            text-align: left;
+        }
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+        #messageInput {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #1565c0;
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .connected {
+            background-color: #c8e6c9;
+            color: #2e7d32;
+        }
+        .disconnected {
+            background-color: #ffcdd2;
+            color: #c62828;
+        }
+        .connecting {
+            background-color: #fff9c4;
+            color: #f57f17;
+        }
+    </style>
+</head>
+<body>
+    <h1>🤖 Nexus WebSocket Chat Demo</h1>
+    
+    <div class="status disconnected" id="status">
+        Disconnected
+    </div>
+    
+    <div class="chat-container">
+        <div class="messages" id="messages">
+            <div class="message ai-message">
+                Welcome! Click "Connect" to start chatting with AI through Nexus WebSocket.
+            </div>
+        </div>
+        
+        <div class="input-area">
+            <input 
+                type="text" 
+                id="messageInput" 
+                placeholder="Type your message here..." 
+                disabled
+                onkeypress="if(event.key === 'Enter') sendMessage()"
+            >
+            <button id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+            <button id="connectBtn" onclick="toggleConnection()">Connect</button>
+        </div>
+    </div>
+    
+    <div style="margin-top: 20px; color: #666;">
+        <p><strong>Features:</strong></p>
+        <ul>
+            <li>Real-time bidirectional communication</li>
+            <li>Persistent session support</li>
+            <li>Automatic reconnection</li>
+            <li>Stream or complete responses</li>
+        </ul>
+    </div>
+
+    <script>
+        let ws = null;
+        let sessionId = localStorage.getItem('nexus-session-id') || null;
+        let isConnected = false;
+
+        function updateStatus(status, text) {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status ${status}`;
+            statusEl.textContent = text;
+        }
+
+        function addMessage(content, isUser = false) {
+            const messagesEl = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+            messageDiv.textContent = content;
+            messagesEl.appendChild(messageDiv);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function connect() {
+            updateStatus('connecting', 'Connecting...');
+            
+            // Connect to WebSocket endpoint
+            const wsUrl = sessionId 
+                ? `ws://localhost:8000/ws?session_id=${sessionId}`
+                : 'ws://localhost:8000/ws';
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                isConnected = true;
+                updateStatus('connected', 'Connected');
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('connectBtn').textContent = 'Disconnect';
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                switch(data.type) {
+                    case 'connected':
+                        sessionId = data.session_id;
+                        localStorage.setItem('nexus-session-id', sessionId);
+                        addMessage(`Connected! Session: ${sessionId}`);
+                        break;
+                    
+                    case 'response':
+                        addMessage(data.content);
+                        break;
+                    
+                    case 'stream_chunk':
+                        // For streaming, append to last AI message
+                        const messages = document.querySelectorAll('.ai-message');
+                        const lastMessage = messages[messages.length - 1];
+                        lastMessage.textContent += data.content;
+                        break;
+                    
+                    case 'error':
+                        addMessage(`Error: ${data.error}`);
+                        break;
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateStatus('disconnected', 'Connection error');
+            };
+            
+            ws.onclose = () => {
+                isConnected = false;
+                updateStatus('disconnected', 'Disconnected');
+                document.getElementById('messageInput').disabled = true;
+                document.getElementById('sendBtn').disabled = true;
+                document.getElementById('connectBtn').textContent = 'Connect';
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function toggleConnection() {
+            if (isConnected) {
+                disconnect();
+            } else {
+                connect();
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || !isConnected) return;
+            
+            // Add user message to chat
+            addMessage(message, true);
+            
+            // Send message through WebSocket
+            ws.send(JSON.stringify({
+                type: 'chat',
+                message: message,
+                session_id: sessionId
+            }));
+            
+            // Clear input
+            input.value = '';
+        }
+    </script>
+</body>
+</html>

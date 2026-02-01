@@ -1,0 +1,10 @@
+#!/bin/bash
+# QwenDevr Global Launcher
+# Allows running QwenDevr from anywhere by typing 'qwendevr'
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Change to QwenDevr directory and run
+cd "$SCRIPT_DIR"
+python3 qwen_devr_cli.py "$@"

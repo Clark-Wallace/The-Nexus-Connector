@@ -191,14 +191,16 @@ class ConnectionPool:
 class WebSocketManager:
     """Main WebSocket connection manager"""
     
-    def __init__(self, session_store):
+    def __init__(self, session_store, wrapper_factory=None):
         """
         Initialize WebSocket manager
         
         Args:
             session_store: Session store for managing AI wrapper instances
+            wrapper_factory: Factory function to create new UnifiedAIWrapper instances
         """
         self.session_store = session_store
+        self.wrapper_factory = wrapper_factory
         self.connection_pool = ConnectionPool()
         self.metrics = ConnectionMetrics()
     
@@ -224,13 +226,12 @@ class WebSocketManager:
             if not session_id:
                 session_id = f"ws-{connection_id}"
             
+            # Get wrapper from session store
+            # We need to provide a factory function
+            # For now, we'll expect the WebSocketManager to be initialized with a factory
             wrapper = await self.session_store.get_or_create(
                 session_id,
-                lambda: UnifiedAIWrapper(
-                    # These will be filled in by the session store's factory
-                    provider=None,  # Will be set by factory
-                    api_key=None    # Will be set by factory
-                )
+                self.wrapper_factory if hasattr(self, 'wrapper_factory') else None
             )
             
             # Create connection handler

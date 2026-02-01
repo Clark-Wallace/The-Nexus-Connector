@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Multi-Provider Chat Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .provider-info {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .provider-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .openai { background-color: #74aa9c; color: white; }
+        .anthropic { background-color: #d97757; color: white; }
+        .google { background-color: #4285f4; color: white; }
+        .xai { background-color: #000; color: white; }
+        .deepseek { background-color: #5e35b1; color: white; }
+        .ollama { background-color: #333; color: white; }
+        .openrouter { background-color: #ff6b6b; color: white; }
+        
+        .chat-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 0;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #fafafa;
+        }
+        .message {
+            margin: 15px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+        .user-message {
+            flex-direction: row-reverse;
+        }
+        .user-message .message-content {
+            background-color: #007aff;
+            color: white;
+        }
+        .ai-message .message-content {
+            background-color: #e9ecef;
+            color: #333;
+        }
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .user-avatar {
+            background-color: #007aff;
+            color: white;
+        }
+        .ai-avatar {
+            background-color: #6c757d;
+            color: white;
+        }
+        .typing-indicator {
+            display: none;
+            padding: 20px;
+            color: #6c757d;
+            font-style: italic;
+        }
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+        #messageInput {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 24px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        #messageInput:focus {
+            border-color: #667eea;
+        }
+        .button {
+            padding: 12px 24px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .button:hover {
+            background-color: #5a5bc9;
+            transform: translateY(-1px);
+        }
+        .button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .connecting {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .stats {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .quick-start {
+            margin-top: 20px;
+            padding: 20px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            border-left: 4px solid #2196f3;
+        }
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌐 Nexus Multi-Provider Chat</h1>
+        <p>Connect to any AI provider through a unified WebSocket interface</p>
+    </div>
+    
+    <div class="provider-info">
+        <div>
+            <strong>Current Provider:</strong>
+            <span id="providerBadge" class="provider-badge">Not Connected</span>
+            <span id="modelInfo" style="margin-left: 10px; color: #666;"></span>
+        </div>
+        <div class="status disconnected" id="status">
+            Disconnected
+        </div>
+    </div>
+    
+    <div class="chat-container">
+        <div class="chat-header">
+            💬 Nexus Chat - Universal AI Interface
+        </div>
+        
+        <div class="messages" id="messages">
+            <div class="message ai-message">
+                <div class="message-avatar ai-avatar">🤖</div>
+                <div class="message-content">
+                    Welcome! I'm connected through Nexus, which means you can chat with any AI provider.
+                    Click "Connect" to start our conversation!
+                </div>
+            </div>
+        </div>
+        
+        <div class="typing-indicator" id="typingIndicator">
+            AI is typing...
+        </div>
+        
+        <div class="input-area">
+            <input 
+                type="text" 
+                id="messageInput" 
+                placeholder="Type your message here..." 
+                disabled
+                onkeypress="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }"
+            >
+            <button class="button" id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+            <button class="button" id="connectBtn" onclick="toggleConnection()">Connect</button>
+        </div>
+    </div>
+    
+    <div class="stats" id="stats" style="display: none;">
+        <h3>📊 Connection Statistics</h3>
+        <div id="statsContent"></div>
+    </div>
+    
+    <div class="quick-start">
+        <h3>🚀 Quick Start</h3>
+        <p><strong>Step 1:</strong> Open a new terminal window</p>
+        <p><strong>Step 2:</strong> Navigate to the examples folder:</p>
+        <pre><code>cd /Users/clarkwallace/Desktop/Projects\ Main/The-Nexus-Connector/examples</code></pre>
+        
+        <p><strong>Step 3:</strong> Set up your configuration (first time only):</p>
+        <pre><code>cp .env.example .env
+# Edit .env and add your API keys</code></pre>
+        
+        <p><strong>Step 4:</strong> Start the server with your chosen AI provider:</p>
+        <pre><code># OpenAI (ChatGPT)
+python nexus_websocket_server.py --provider openai --model gpt-4
+
+# Anthropic (Claude)
+python nexus_websocket_server.py --provider anthropic --model claude-3-opus-20240229
+
+# Google (Gemini)
+python nexus_websocket_server.py --provider google --model gemini-pro
+
+# Local Models (Ollama)
+python nexus_websocket_server.py --provider ollama --model llama2
+
+# Multiple Models (OpenRouter)
+python nexus_websocket_server.py --provider openrouter --model qwen/qwen3-coder</code></pre>
+        
+        <p><strong>Step 5:</strong> Keep this page open and click "Connect" above to start chatting!</p>
+    </div>
+
+    <script>
+        let ws = null;
+        let sessionId = localStorage.getItem('nexus-session-id') || null;
+        let isConnected = false;
+        let statsInterval = null;
+
+        function updateStatus(status, text) {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status ${status}`;
+            statusEl.textContent = text;
+        }
+
+        function showTyping(show) {
+            document.getElementById('typingIndicator').style.display = show ? 'block' : 'none';
+        }
+
+        function addMessage(content, isUser = false, isSystem = false) {
+            const messagesEl = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+            
+            const avatarDiv = document.createElement('div');
+            avatarDiv.className = `message-avatar ${isUser ? 'user-avatar' : 'ai-avatar'}`;
+            avatarDiv.textContent = isUser ? 'U' : '🤖';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            
+            messageDiv.appendChild(avatarDiv);
+            messageDiv.appendChild(contentDiv);
+            
+            messagesEl.appendChild(messageDiv);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        async function fetchStats() {
+            try {
+                const response = await fetch('http://localhost:8000/ws/stats');
+                const stats = await response.json();
+                
+                document.getElementById('stats').style.display = 'block';
+                document.getElementById('statsContent').innerHTML = `
+                    <p>🔌 Active Connections: ${stats.active_connections}</p>
+                    <p>📊 Total Connections: ${stats.total_connections}</p>
+                    <p>💬 Total Messages: ${stats.total_messages}</p>
+                    <p>❌ Connection Errors: ${stats.connection_errors}</p>
+                `;
+            } catch (e) {
+                // Stats endpoint not available
+            }
+        }
+
+        async function fetchServerInfo() {
+            try {
+                const response = await fetch('http://localhost:8000/health');
+                const info = await response.json();
+                
+                document.getElementById('providerBadge').className = `provider-badge ${info.provider}`;
+                document.getElementById('providerBadge').textContent = info.provider.toUpperCase();
+                document.getElementById('modelInfo').textContent = info.model || '';
+            } catch (e) {
+                // Server info not available
+            }
+        }
+
+        function connect() {
+            updateStatus('connecting', 'Connecting...');
+            showTyping(false);
+            
+            // Connect to WebSocket endpoint
+            const wsUrl = sessionId 
+                ? `ws://localhost:8000/ws?session_id=${sessionId}`
+                : 'ws://localhost:8000/ws';
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                isConnected = true;
+                updateStatus('connected', 'Connected');
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('connectBtn').textContent = 'Disconnect';
+                
+                // Fetch server info
+                fetchServerInfo();
+                
+                // Start stats updates
+                fetchStats();
+                statsInterval = setInterval(fetchStats, 2000);
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                showTyping(false);
+                
+                switch(data.type) {
+                    case 'connected':
+                        sessionId = data.session_id;
+                        localStorage.setItem('nexus-session-id', sessionId);
+                        addMessage(`Connected to Nexus! Session ID: ${sessionId}`, false, true);
+                        break;
+                    
+                    case 'response':
+                        addMessage(data.content);
+                        if (data.metadata && data.metadata.tokens_used) {
+                            console.log(`Tokens used: ${data.metadata.tokens_used}`);
+                        }
+                        break;
+                    
+                    case 'stream_start':
+                        showTyping(true);
+                        break;
+                    
+                    case 'stream_chunk':
+                        // For streaming, append to last AI message
+                        const messages = document.querySelectorAll('.ai-message .message-content');
+                        if (messages.length > 0) {
+                            const lastMessage = messages[messages.length - 1];
+                            lastMessage.textContent += data.content;
+                        } else {
+                            addMessage(data.content);
+                        }
+                        break;
+                    
+                    case 'stream_end':
+                        showTyping(false);
+                        break;
+                    
+                    case 'error':
+                        addMessage(`Error: ${data.error}`, false, true);
+                        break;
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateStatus('disconnected', 'Connection error');
+                showTyping(false);
+            };
+            
+            ws.onclose = () => {
+                isConnected = false;
+                updateStatus('disconnected', 'Disconnected');
+                document.getElementById('messageInput').disabled = true;
+                document.getElementById('sendBtn').disabled = true;
+                document.getElementById('connectBtn').textContent = 'Connect';
+                showTyping(false);
+                
+                // Stop stats updates
+                if (statsInterval) {
+                    clearInterval(statsInterval);
+                    statsInterval = null;
+                }
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function toggleConnection() {
+            if (isConnected) {
+                disconnect();
+            } else {
+                connect();
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || !isConnected) return;
+            
+            // Add user message to chat
+            addMessage(message, true);
+            
+            // Show typing indicator
+            showTyping(true);
+            
+            // Send message through WebSocket
+            ws.send(JSON.stringify({
+                type: 'chat',
+                message: message,
+                session_id: sessionId
+            }));
+            
+            // Clear input
+            input.value = '';
+            input.focus();
+        }
+
+        // Auto-connect on load
+        window.addEventListener('load', () => {
+            // Uncomment to auto-connect
+            // connect();
+        });
+    </script>
+</body>
+</html>

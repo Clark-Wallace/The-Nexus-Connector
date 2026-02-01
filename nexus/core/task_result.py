@@ -3,15 +3,18 @@ Task execution result class.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from datetime import datetime
+
+if TYPE_CHECKING:
+    from .execution_log import ExecutionLog
 
 
 @dataclass
 class TaskResult:
     """
     Result of task execution.
-    
+
     This provides a unified format for task results across all AI providers.
     """
     success: bool = False
@@ -30,6 +33,7 @@ class TaskResult:
     session_id: Optional[str] = None
     timestamp: datetime = field(default_factory=datetime.now)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    execution_log: Optional["ExecutionLog"] = field(default=None, repr=False)
     
     def __str__(self) -> str:
         """String representation."""

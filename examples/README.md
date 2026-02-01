@@ -41,48 +41,113 @@ Execute complex multi-step tasks with automatic continuation.
 python examples/task_execution.py
 ```
 
-## CLI Development Tools
-
-### 🚀 QwenDevr - The Ultimate Qwen CLI (`qwen_devr_cli.py`)
-**Claude Code-inspired development assistant powered by Qwen2.5-72B-Instruct via OpenRouter**
-
-A comprehensive CLI tool that provides:
-- 🎯 **Claude Code-like Interface** - Familiar commands for development tasks
-- ⚡ **Fast & Efficient** - No thinking tokens, direct responses from Qwen2.5  
-- 🛠️ **Complete Toolkit** - Project setup, code analysis, testing, docs, refactoring
-- 💬 **Interactive Mode** - Chat-like interface for development assistance
-- 📁 **Project Management** - Create and manage different project types
+### 6. Custom Tools (`custom_tools_example.py`) ✨ NEW
+Create custom tools using the `@tool` decorator and register them with NexusConnector.
 
 ```bash
-# Setup and demo
-pip install rich click typer prompt-toolkit
-export OPENROUTER_API_KEY="your-key-here"
-
-# Interactive mode (recommended)
-python examples/qwen_devr_cli.py --interactive
-
-# Quick commands
-python examples/qwen_devr_cli.py "analyze this codebase"
-python examples/qwen_devr_cli.py --setup web my_app
-python examples/qwen_devr_cli.py --file main.py "add error handling"
-
-# Demo (no API key needed)
-python examples/qwen_devr_demo.py
+python examples/custom_tools_example.py
 ```
 
-**Available Commands:**
-- `analyze [focus]` - Analyze project/codebase with optional focus area
-- `setup <type> [name]` - Create new projects (web, api, cli, lib, data, game, mobile)
-- `fix <file> [issues]` - Fix issues in specific files
-- `test <file>` - Generate comprehensive test suites
-- `docs [scope]` - Generate documentation
-- `refactor <file> <requirements>` - Refactor code with specific requirements
+Features demonstrated:
+- `@tool` decorator for creating custom tools
+- Async and sync tool support
+- Tool categories and metadata
+- Observability hooks (`on_tool_call`, `on_tool_result`)
 
-**Project Types:** web, api, cli, lib, data, game, mobile
+### 7. Observable Execution (`observable_execution_example.py`)
+Full visibility into task execution with hooks, logging, and human-in-the-loop.
 
-**Why Qwen2.5-72B?** Fast, no thinking tokens (unlike DeepSeek), excellent code quality, cost-effective via OpenRouter.
+```bash
+python examples/observable_execution_example.py
+```
 
-See `qwen_devr_setup.md` for complete setup guide and examples.
+Features demonstrated:
+- Execution hooks for real-time monitoring
+- ExecutionLog for detailed tracking
+- Human-in-the-loop confirmation
+- Checkpoint and rollback support
+
+### 8. MCP Server Integration (`mcp_example.py`) ✨ NEW
+Connect to MCP (Model Context Protocol) servers to give your AI agent access to external tools.
+
+```bash
+python examples/mcp_example.py
+```
+
+Features demonstrated:
+- Connect to well-known MCP servers (filesystem, github, memory, etc.)
+- Dynamically add/remove MCP servers
+- Use MCP tools alongside custom `@tool` functions
+- Configure custom MCP servers
+
+Supported MCP servers:
+- `filesystem` - Read/write files, list directories
+- `github` - Search repos, create issues, make PRs
+- `postgres` / `sqlite` - Database queries
+- `memory` - Key-value storage
+- `fetch` - HTTP requests
+- `time` - Time/timezone operations
+- `brave-search` - Web search
+- `puppeteer` - Browser automation
+- `slack` - Slack messaging
+
+### 9. Smart Routing (`smart_routing_example.py`) ✨ NEW
+Intelligent provider selection with automatic fallback.
+
+```bash
+python examples/smart_routing_example.py
+```
+
+Features demonstrated:
+- Auto-routing from environment variables (`router="auto"`)
+- Task-based routing (code → Claude, math → GPT-4)
+- Routing strategies: cost, quality, latency, adaptive
+- Automatic fallback when providers fail
+- Provider statistics and monitoring
+
+Routing strategies:
+- `cost` - Cheapest provider (DeepSeek, Ollama)
+- `quality` - Best for task type
+- `latency` - Fastest based on history
+- `fallback` - Priority order with retry
+- `adaptive` - Balances all factors
+
+## CLI Development Tools
+
+### 🚀 QwenDevr - The Ultimate Qwen CLI
+**Moved to dedicated folder: [`/QwenDevr/`](../QwenDevr/)**
+
+**Claude Code-inspired development assistant powered by Qwen3-235B (FREE!) via OpenRouter**
+
+✨ **NEW: Now uses FREE Qwen3-235B model with 235B parameters!**
+
+QwenDevr has been moved to its own dedicated folder with complete setup:
+
+```bash
+# Navigate to QwenDevr
+cd QwenDevr/
+
+# Run setup script
+./setup.sh
+
+# Or install manually
+pip install -r qwen_devr_requirements.txt
+export OPENROUTER_API_KEY="your-key-here"
+
+# Start using QwenDevr (now defaults to FREE Qwen3-235B!)
+python qwen_devr_cli.py --interactive
+python qwen.py --interactive        # Short launcher
+python qwen_devr_demo.py            # Demo (no API key needed)
+```
+
+**Key Features:**
+- 🆓 **Completely FREE** - Qwen3-235B is free on OpenRouter
+- 🚀 **235B Parameters** - 3x larger than previous generation
+- 🎯 **Claude Code-like Interface** - Familiar development commands
+- 🔄 **Model Switching** - Switch between qwen3-235b, qwen2.5-72b, qwen2.5-coder
+- 📁 **Project Management** - Create web, api, cli, lib, data, game, mobile projects
+
+**See [`QwenDevr/README.md`](../QwenDevr/README.md) for complete documentation.**
 
 ## Development Examples
 

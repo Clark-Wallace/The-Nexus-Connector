@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Optional, AsyncIterator
 from anthropic import AsyncAnthropic
 
 from ..core.base_connector import BaseConnector, Message, Response
+from ..utils.tokens import TokenCounter
 
 
 class AnthropicConnector(BaseConnector):
@@ -22,12 +23,15 @@ class AnthropicConnector(BaseConnector):
     def __init__(self, api_key: str, model: Optional[str] = None, **kwargs):
         """Initialize Anthropic connector."""
         super().__init__(api_key, model, **kwargs)
-        
+
         # Initialize client
         self.client = AsyncAnthropic(api_key=self.api_key)
-        
+
         # Claude requires max_tokens to be set
         self.default_max_tokens = kwargs.get("max_tokens", 4096)
+
+        # Initialize token counter (uses tiktoken with cl100k_base as approximation)
+        self._token_counter = TokenCounter(self.model)
     
     def get_default_model(self) -> str:
         """Get default model for Anthropic."""
@@ -155,10 +159,13 @@ class AnthropicConnector(BaseConnector):
                 yield text
     
     def count_tokens(self, text: str) -> int:
-        """Count tokens for Claude models."""
-        # Anthropic doesn't provide a token counter in the SDK
-        # Use approximation: ~4 characters per token
-        return len(text) // 4
+        """
+        Count tokens for Claude models.
+
+        Uses tiktoken with cl100k_base encoding as approximation.
+        Note: This is approximate; actual Claude tokenization may vary by 5-10%.
+        """
+        return self._token_counter.count(text)
     
     def supports_tools(self) -> bool:
         """Claude supports tool/function calling."""

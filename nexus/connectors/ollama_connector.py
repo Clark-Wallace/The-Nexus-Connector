@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional, AsyncIterator
 import logging
 
 from ..core.base_connector import BaseConnector, Message, Response, AIProvider
+from ..utils.tokens import TokenCounter
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,10 @@ class OllamaConnector(BaseConnector):
         super().__init__(api_key, model, **kwargs)
         self.base_url = base_url.rstrip('/')
         self.model = model or "llama2"
-        
+
+        # Initialize token counter (uses tiktoken for approximation)
+        self._token_counter = TokenCounter(self.model)
+
         # Check if Ollama is running
         self._check_ollama_status()
     
@@ -56,10 +60,11 @@ class OllamaConnector(BaseConnector):
     def count_tokens(self, text: str) -> int:
         """
         Estimate token count for Ollama models.
-        Uses rough approximation since Ollama doesn't provide token counting.
+
+        Uses tiktoken with cl100k_base as approximation.
+        Note: Actual tokenization varies by model; this is an estimate.
         """
-        # Rough estimate: 1 token ≈ 4 characters
-        return len(text) // 4
+        return self._token_counter.count(text)
     
     def _check_ollama_status(self):
         """Check if Ollama is running and available."""

@@ -97,15 +97,28 @@ class OpenAIConnector(BaseConnector):
             tool_calls = self.extract_tool_calls(message)
         
         # Create unified response
+        # Handle missing usage data (common with OpenRouter)
+        usage_data = {}
+        if hasattr(response, 'usage') and response.usage:
+            usage_data = {
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens
+            }
+        else:
+            # Estimate token counts if usage data is missing
+            usage_data = {
+                "prompt_tokens": sum(self.count_tokens(msg.content) for msg in messages),
+                "completion_tokens": self.count_tokens(message.content or ""),
+                "total_tokens": 0
+            }
+            usage_data["total_tokens"] = usage_data["prompt_tokens"] + usage_data["completion_tokens"]
+        
         return Response(
             content=message.content or "",
             tool_calls=tool_calls,
             finish_reason=choice.finish_reason,
-            usage={
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
-            },
+            usage=usage_data,
             raw_response=response
         )
     
