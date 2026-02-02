@@ -91,16 +91,16 @@ class SparkButton(Button):
 class ChatMessage(Static):
     """A single chat message."""
 
-    def __init__(self, role: str, content: str):
-        self.role = role
-        self.content = content
+    def __init__(self, role: str, message_content: str):
+        self.msg_role = role
+        self.msg_content = message_content
         super().__init__()
 
     def compose(self) -> ComposeResult:
-        if self.role == "user":
-            yield Static(f"[bold cyan]You:[/bold cyan] {self.content}", classes="user-msg")
+        if self.msg_role == "user":
+            yield Static(f"[bold cyan]You:[/bold cyan] {self.msg_content}", classes="user-msg")
         else:
-            yield Markdown(self.content, classes="assistant-msg")
+            yield Markdown(self.msg_content, classes="assistant-msg")
 
 
 class FileItem(Static):
