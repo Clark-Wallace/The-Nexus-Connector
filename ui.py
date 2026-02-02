@@ -28,9 +28,13 @@ import gradio as gr
 PROJECTS_DIR = Path("./projects")
 PROJECTS_DIR.mkdir(exist_ok=True)
 
+# Session store for persistent conversations (the Nexus way!)
+from nexus.web import SessionStore
+SESSION_STORE = SessionStore(timeout_hours=24)
 
-def get_connector(provider: str, api_key: Optional[str] = None):
-    """Get a NexusConnector with the specified provider."""
+
+def get_connector_for_build(provider: str, api_key: Optional[str] = None):
+    """Get a fresh NexusConnector for building (no session needed)."""
     from nexus import NexusConnector
 
     # Get API key from param or environment
@@ -52,6 +56,39 @@ def get_connector(provider: str, api_key: Optional[str] = None):
     )
 
 
+def get_session_connector(provider: str, api_key: Optional[str] = None, session_id: str = "default"):
+    """Get a persistent connector from the session store (the Nexus way!)."""
+    from nexus import NexusConnector
+
+    # Get API key from param or environment
+    if not api_key:
+        key_map = {
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "google": "GOOGLE_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
+            "xai": "XAI_API_KEY",
+        }
+        if provider in key_map:
+            api_key = os.getenv(key_map[provider])
+
+    # Create a unique session key based on provider
+    full_session_id = f"{session_id}_{provider}"
+
+    # Get or create connector from session store
+    async def _get():
+        return await SESSION_STORE.get_or_create(
+            full_session_id,
+            lambda: NexusConnector(
+                provider=provider,
+                api_key=api_key,
+                workspace=str(PROJECTS_DIR / "current"),
+            )
+        )
+
+    return run_async(_get())
+
+
 def run_async(coro):
     """Run async code synchronously."""
     try:
@@ -71,25 +108,34 @@ def run_async(coro):
 # CHAT FUNCTIONS
 # =============================================================================
 
-def chat_response(message: str, history: List[Tuple[str, str]], provider: str, api_key: str) -> Tuple[str, List[Tuple[str, str]]]:
-    """Handle chat messages."""
-    if not message.strip():
+def chat_response(message: str, history: List[dict], provider: str, api_key: str) -> Tuple[str, List[dict]]:
+    """Handle chat messages using Nexus session persistence."""
+    if not message or not message.strip():
         return "", history
 
+    # Add user message to history for display
+    history = history + [{"role": "user", "content": message}]
+
     try:
-        connector = get_connector(provider, api_key if api_key.strip() else None)
+        # Get persistent connector from session store
+        # This maintains conversation history automatically!
+        connector = get_session_connector(
+            provider,
+            api_key if api_key and api_key.strip() else None,
+            session_id="ui_chat"
+        )
 
         async def _chat():
             response = await connector.send_message(message)
             return response.get("content", "No response")
 
         response = run_async(_chat())
-        history.append((message, response))
+        history = history + [{"role": "assistant", "content": response}]
         return "", history
 
     except Exception as e:
         error_msg = f"❌ Error: {str(e)}"
-        history.append((message, error_msg))
+        history = history + [{"role": "assistant", "content": error_msg}]
         return "", history
 
 
@@ -123,7 +169,7 @@ def build_project(
     try:
         progress(0.1, desc="Starting build...")
 
-        connector = get_connector(provider, api_key if api_key.strip() else None)
+        connector = get_connector_for_build(provider, api_key if api_key and api_key.strip() else None)
         connector.workspace = str(project_path)
 
         async def _build():
@@ -409,17 +455,7 @@ def create_ui():
 
     default_provider = available_providers[0] if available_providers else "ollama"
 
-    with gr.Blocks(
-        title="Nexus Connector",
-        theme=gr.themes.Soft(
-            primary_hue="blue",
-            secondary_hue="slate",
-        ),
-        css="""
-        .contain { max-width: 1200px; margin: auto; }
-        .file-tree { font-family: monospace; white-space: pre; }
-        """
-    ) as app:
+    with gr.Blocks(title="Nexus Connector") as app:
 
         gr.Markdown("""
         # 🚀 Nexus Connector
@@ -493,7 +529,6 @@ def create_ui():
                 chatbot = gr.Chatbot(
                     label="Chat with AI",
                     height=400,
-                    show_copy_button=True,
                 )
 
                 with gr.Row():
@@ -630,7 +665,13 @@ def create_ui():
             inputs=[chat_input, chatbot, chat_provider, api_key_input],
             outputs=[chat_input, chatbot],
         )
-        clear_btn.click(lambda: ([], ""), outputs=[chatbot, chat_input])
+        def clear_chat():
+            """Clear chat history and session."""
+            # Clear all chat sessions
+            run_async(SESSION_STORE.clear())
+            return []
+
+        clear_btn.click(clear_chat, outputs=[chatbot])
 
         # Projects tab
         refresh_btn.click(list_projects, outputs=[projects_table])
