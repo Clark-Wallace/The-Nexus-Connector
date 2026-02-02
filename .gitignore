@@ -212,3 +212,9 @@ data/
 # Lock files (except package-lock.json)
 *.lock
 !package-lock.json
+
+# Archive folder (old backups, superseded docs, spinoff projects)
+.archive/
+
+# Benchmarks
+.benchmarks/

@@ -95,7 +95,12 @@ The Nexus Connector provides a unified interface for multiple AI providers, tran
 
 **nexus/web/**
 - `web_connector.py`: FastAPI integration for HTTP API
+- `websocket_manager.py`: WebSocket support for real-time streaming
 - `session_store.py`: Redis-like session persistence
+
+**apps/**
+- `methinks/`: AI-powered project specification generator (standalone app)
+- `devtools/`: Development tools (planned)
 
 ### Provider Capabilities
 
@@ -103,7 +108,7 @@ The Nexus Connector provides a unified interface for multiple AI providers, tran
 |----------|--------------|-----------|--------------|
 | OpenAI | ✅ | ✅ | Full tool support, function calling |
 | Anthropic | ✅ | ✅ | Native tool use, streaming |
-| Google | ❌ | ✅ | Text-based tool extraction |
+| Google | ✅ | ✅ | Native function calling via google-genai SDK |
 | xAI | ✅ | ✅ | Grok models with tool support |
 | DeepSeek | ✅ | ✅ | Specialized coding models |
 | Ollama | ✅ | ✅ | Local LLM support |
@@ -121,3 +126,18 @@ The Nexus Connector provides a unified interface for multiple AI providers, tran
 3. **Error Handling**: Each connector implements retry logic and graceful degradation
 4. **Cost Tracking**: Token usage tracked in responses and aggregated in wrapper
 5. **Session Cleanup**: Web sessions expire after 24 hours of inactivity
+
+## Recent Changes
+
+- **Google SDK Migration**: Migrated from deprecated `google.generativeai` to `google-genai` SDK
+- **Native Google Tools**: Google connector now supports native function calling for Gemini 1.5/2.0 models
+- **WebSocket Support**: Added real-time streaming via WebSocket manager
+- **MeThinks App**: Added AI-powered project specification generator in `apps/methinks/`
+
+## CLI Entry Points (pyproject.toml)
+
+```bash
+nexus          # Main Nexus CLI (nexus.cli:main)
+methinks       # Project spec generator (apps.methinks.cli:main)
+nexus-devtools # Development tools (apps.devtools.cli:main)
+```

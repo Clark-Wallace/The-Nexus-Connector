@@ -1,7 +1,7 @@
 # Product Roadmap
 
-> Last Updated: 2025-07-23
-> Version: 1.0.0
+> Last Updated: 2026-02-02
+> Version: 1.1.0
 > Status: Active Development
 
 ## Phase 0: Already Completed
@@ -23,6 +23,9 @@ The following features have been implemented:
 - [x] **CI/CD Pipeline** - GitHub Actions workflow
 - [x] **Documentation** - README, examples, API reference
 - [x] **Package Structure** - Modern Python packaging with pyproject.toml
+- [x] **WebSocket Support** - Real-time bidirectional streaming via WebSocketManager
+- [x] **Google SDK Migration** - Migrated to google-genai with native function calling
+- [x] **MeThinks App** - AI-powered project specification generator (apps/methinks/)
 
 ## Phase 1: Current Development (Q1 2025)
 
@@ -31,7 +34,7 @@ The following features have been implemented:
 
 ### Must-Have Features
 
-- [ ] WebSocket Support - Real-time bidirectional communication `L`
+- [x] WebSocket Support - Real-time bidirectional communication `L` ✅ COMPLETE
 - [ ] Redis Session Store - Distributed session management `M`
 - [ ] Rate Limiting - Per-session and per-user limits `M`
 - [ ] Request Middleware - Extensible middleware system `M`
