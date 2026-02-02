@@ -380,6 +380,137 @@ Keep it beginner-friendly."""
 
 
 # =============================================================================
+# MR. METHINKS - Idea Generator
+# =============================================================================
+
+METHINKS_PERSONALITY = """You are Mr. MeThinks, a friendly and enthusiastic idea generator!
+
+Your personality:
+- Excited about helping people find cool project ideas
+- Encouraging and positive
+- You explain ideas simply, no jargon
+- You tailor ideas to the person's interests and skill level
+- You give concrete, buildable project ideas (not vague concepts)
+
+When suggesting ideas:
+1. Give exactly 3 project ideas
+2. Each idea should have: a fun name, what it does, why it's cool
+3. Mark one as "Perfect for you!" based on their interests
+4. Make ideas progressively more ambitious (starter → intermediate → ambitious)
+5. End with an encouraging message
+
+Format each idea like:
+### 🎯 [Fun Project Name]
+**What it is:** [1 sentence]
+**Why it's cool:** [1 sentence]
+**You'll learn:** [2-3 skills]
+**Difficulty:** ⭐/⭐⭐/⭐⭐⭐
+"""
+
+
+def methinks_generate(
+    interests: str,
+    skill_level: str,
+    problem: str,
+    provider: str
+) -> str:
+    """Generate project ideas based on user input."""
+
+    if not interests.strip() and not problem.strip():
+        return """### 👋 Hey there! I'm Mr. MeThinks!
+
+I help you figure out what to build. Tell me a bit about yourself:
+
+- **What are you into?** (games, music, productivity, social, data, etc.)
+- **What bugs you?** (a problem you wish was solved)
+- **What's your vibe?** (just learning, want a challenge, etc.)
+
+Fill in the boxes and I'll cook up some perfect project ideas for you! 🧠✨"""
+
+    connector = get_connector(provider, session_id="methinks")
+
+    # Build the prompt
+    prompt = f"""{METHINKS_PERSONALITY}
+
+Here's who I'm helping:
+
+**Their interests:** {interests if interests.strip() else "Not specified"}
+**Skill level:** {skill_level}
+**Problem they want to solve:** {problem if problem.strip() else "Not specified - just looking for cool ideas"}
+
+Generate 3 perfect project ideas for them! Be specific and concrete - these should be things they can actually build."""
+
+    async def _think():
+        resp = await connector.send_message(prompt)
+        return resp.get("content", "Hmm, my brain got stuck! Try again?")
+
+    result = run_async(_think())
+    return result
+
+
+def methinks_random(provider: str) -> Tuple[str, str, str]:
+    """Generate random interests for inspiration."""
+    import random
+
+    interests_options = [
+        "music and playlists",
+        "gaming and esports",
+        "cooking and recipes",
+        "fitness and health",
+        "movies and TV shows",
+        "books and reading",
+        "travel and places",
+        "finance and budgeting",
+        "social media",
+        "productivity and habits",
+        "memes and humor",
+        "pets and animals",
+        "art and design",
+        "news and current events",
+        "dating and relationships",
+        "learning and education",
+    ]
+
+    problems_options = [
+        "I always forget things",
+        "I waste too much time on my phone",
+        "I can't decide what to watch/eat/do",
+        "I lose track of my goals",
+        "I want to share stuff with friends easier",
+        "I have too many tabs open",
+        "I can't find good recommendations",
+        "My files are a mess",
+        "I don't drink enough water",
+        "I want to learn something new every day",
+        "",  # Sometimes no problem, just exploring
+        "",
+    ]
+
+    return (
+        random.choice(interests_options),
+        "Just starting out",
+        random.choice(problems_options),
+    )
+
+
+def use_idea_in_vibe(idea_text: str) -> str:
+    """Extract a buildable prompt from idea text for Vibe Code."""
+    # Try to extract the first project name and description
+    lines = idea_text.split('\n')
+    for i, line in enumerate(lines):
+        if '###' in line and '🎯' in line:
+            # Found a project header
+            name = line.replace('###', '').replace('🎯', '').strip()
+            # Look for "What it is" in next few lines
+            for j in range(i+1, min(i+5, len(lines))):
+                if 'What it is' in lines[j]:
+                    desc = lines[j].split(':', 1)[-1].strip().strip('*')
+                    return f"Build {name}: {desc}"
+
+    return "Build me something cool"
+
+
+# =============================================================================
 # UI LAYOUT
 # =============================================================================
 
@@ -468,6 +599,71 @@ def create_ui():
 
                 # Hidden state
                 files_state = gr.State([])
+
+            # =================================================================
+            # MR. METHINKS TAB - Idea Generator
+            # =================================================================
+            with gr.TabItem("🧠 Mr. MeThinks", id="methinks"):
+
+                gr.Markdown("""
+## 🧠 Mr. MeThinks
+
+**Don't know what to build? I got you!**
+
+Tell me about yourself and I'll suggest perfect project ideas tailored just for you.
+                """)
+
+                with gr.Row():
+                    with gr.Column(scale=1):
+
+                        methinks_interests = gr.Textbox(
+                            label="🎯 What are you into?",
+                            placeholder="games, music, productivity, social media, data...",
+                            lines=2,
+                        )
+
+                        methinks_skill = gr.Radio(
+                            label="📊 Your skill level",
+                            choices=["Just starting out", "Know the basics", "Pretty comfortable", "Ready for a challenge"],
+                            value="Just starting out",
+                        )
+
+                        methinks_problem = gr.Textbox(
+                            label="😤 What bugs you? (optional)",
+                            placeholder="A problem you wish was solved... or leave blank!",
+                            lines=2,
+                        )
+
+                        methinks_provider = gr.Dropdown(
+                            choices=providers,
+                            value=default_provider,
+                            label="AI Provider",
+                        )
+
+                        with gr.Row():
+                            methinks_btn = gr.Button("🧠 Think!", variant="primary", scale=2)
+                            methinks_random_btn = gr.Button("🎲 Random", scale=1)
+
+                    with gr.Column(scale=2):
+
+                        methinks_result = gr.Markdown(
+                            value="""### 👋 Hey there! I'm Mr. MeThinks!
+
+I help you figure out what to build. Tell me a bit about yourself:
+
+- **What are you into?** (games, music, productivity, social, data, etc.)
+- **What bugs you?** (a problem you wish was solved)
+- **What's your vibe?** (just learning, want a challenge, etc.)
+
+Fill in the boxes on the left and hit **Think!** 🧠✨
+
+Or hit **Random** 🎲 for instant inspiration!"""
+                        )
+
+                        methinks_use_btn = gr.Button("🚀 Let's Build This!", variant="secondary", visible=True)
+
+                # Store the last result for "use this" button
+                methinks_last_result = gr.State("")
 
             # =================================================================
             # QUICK TOOLS TAB
@@ -625,6 +821,45 @@ python ui.py
             quick_explain,
             inputs=[explain_input, explain_provider],
             outputs=[explain_result],
+        )
+
+        # Mr. MeThinks handlers
+        def handle_methinks(interests, skill, problem, provider):
+            result = methinks_generate(interests, skill, problem, provider)
+            return result, result  # Return to display and store
+
+        methinks_btn.click(
+            handle_methinks,
+            inputs=[methinks_interests, methinks_skill, methinks_problem, methinks_provider],
+            outputs=[methinks_result, methinks_last_result],
+        )
+
+        def handle_random():
+            interests, skill, problem = methinks_random(default_provider)
+            return interests, skill, problem
+
+        methinks_random_btn.click(
+            handle_random,
+            outputs=[methinks_interests, methinks_skill, methinks_problem],
+        )
+
+        # "Let's Build This" button - takes the idea to Vibe Code
+        def use_idea(last_result, current_history, current_files):
+            if not last_result:
+                return current_history, current_files, "*No files created yet*", "", gr.Tabs(selected="vibe")
+
+            # Extract a buildable prompt from the idea
+            prompt = use_idea_in_vibe(last_result)
+
+            # Add as first message in a new session
+            new_history = [{"role": "user", "content": prompt}]
+
+            return new_history, [], "*No files created yet*", "", gr.Tabs(selected="vibe")
+
+        methinks_use_btn.click(
+            use_idea,
+            inputs=[methinks_last_result, vibe_chat, files_state],
+            outputs=[vibe_chat, files_state, files_display, sparks_display],
         )
 
     return app
