@@ -19,8 +19,9 @@ from .models import (
 )
 
 
-# Default storage location
-METHINKS_DIR = Path.home() / ".methinks"
+# Default storage location - use app directory for portability
+APP_DIR = Path(__file__).parent
+METHINKS_DIR = APP_DIR / "data"
 SESSIONS_DIR = METHINKS_DIR / "sessions"
 CONFIG_FILE = METHINKS_DIR / "config.json"
 

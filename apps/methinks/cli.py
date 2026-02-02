@@ -51,25 +51,73 @@ console = Console()
 
 
 def get_connector(provider: str = "openai"):
-    """Get a Nexus connector for AI communication."""
+    """Get an AI connector for communication.
+
+    Tries Nexus Connector first, falls back to direct API if standalone.
+    """
+    import os
+    api_key = os.getenv(f"{provider.upper()}_API_KEY")
+    if not api_key:
+        return None
+
+    # Try Nexus Connector first (if installed)
     try:
         from nexus import NexusConnector
-        import os
-
-        # Get API key from environment
-        api_key = os.getenv(f"{provider.upper()}_API_KEY")
-        if not api_key:
-            return None
-
         return NexusConnector(
             provider=provider,
             api_key=api_key,
             verbose=False,
         )
     except ImportError:
-        return None
+        pass
+
+    # Fallback: Direct API (for standalone mode)
+    try:
+        return DirectAPIConnector(provider, api_key)
     except Exception:
         return None
+
+
+class DirectAPIConnector:
+    """Simple direct API connector for standalone mode (no Nexus dependency)."""
+
+    def __init__(self, provider: str, api_key: str):
+        self.provider = provider
+        self.api_key = api_key
+
+    async def send_message(self, message: str, **kwargs) -> dict:
+        """Send message using direct API calls."""
+        if self.provider == "openai":
+            return await self._openai_send(message)
+        elif self.provider == "anthropic":
+            return await self._anthropic_send(message)
+        else:
+            raise ValueError(f"Standalone mode only supports openai/anthropic, not {self.provider}")
+
+    async def _openai_send(self, message: str) -> dict:
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=self.api_key)
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": message}],
+            )
+            return {"content": response.choices[0].message.content}
+        except ImportError:
+            raise ImportError("Install openai: pip install openai")
+
+    async def _anthropic_send(self, message: str) -> dict:
+        try:
+            from anthropic import AsyncAnthropic
+            client = AsyncAnthropic(api_key=self.api_key)
+            response = await client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=4096,
+                messages=[{"role": "user", "content": message}],
+            )
+            return {"content": response.content[0].text}
+        except ImportError:
+            raise ImportError("Install anthropic: pip install anthropic")
 
 
 @click.group(invoke_without_command=True)
