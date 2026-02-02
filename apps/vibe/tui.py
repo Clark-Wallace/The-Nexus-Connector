@@ -2,14 +2,14 @@
 """
 Nexus Vibe Code TUI - A beautiful terminal interface for building with AI.
 
-Run with: python -m nexus.tui
-Or: nexus tui
+Run with: python -m apps.vibe.tui
+Or via CLI: nexus vibe --tui
 """
 
 import asyncio
 import os
 from pathlib import Path
-from typing import Optional, List
+from typing import List
 
 # Load environment
 try:
@@ -19,59 +19,15 @@ except ImportError:
     pass
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import (
-    Header, Footer, Static, Button, Input,
-    Label, ListView, ListItem, Markdown, Log
-)
+from textual.containers import Horizontal, Vertical, ScrollableContainer
+from textual.widgets import Static, Button, Input, Markdown, Log
 from textual.binding import Binding
-from textual.message import Message
 
-from .core.unified_wrapper import UnifiedAIWrapper
-from .core.base_connector import AIProvider
+# Import from the Nexus library
+from nexus import NexusConnector
 
-
-# =============================================================================
-# SPARK GENERATION
-# =============================================================================
-
-def generate_sparks(context: str) -> List[dict]:
-    """Generate contextual next-step suggestions."""
-    context_lower = context.lower() if isinstance(context, str) else ""
-
-    if any(word in context_lower for word in ["api", "endpoint", "flask", "fastapi", "rest"]):
-        return [
-            {"icon": "🔐", "label": "Add Auth", "desc": "JWT authentication"},
-            {"icon": "🧪", "label": "Add Tests", "desc": "Unit tests"},
-            {"icon": "📚", "label": "API Docs", "desc": "OpenAPI docs"},
-            {"icon": "🐳", "label": "Docker", "desc": "Containerize"},
-            {"icon": "🎨", "label": "Frontend", "desc": "React UI"},
-            {"icon": "🚀", "label": "Deploy", "desc": "Production setup"},
-        ]
-    elif any(word in context_lower for word in ["auth", "jwt", "login"]):
-        return [
-            {"icon": "👥", "label": "User Roles", "desc": "Permissions"},
-            {"icon": "🔄", "label": "OAuth", "desc": "Google login"},
-            {"icon": "📧", "label": "Email", "desc": "Verification"},
-            {"icon": "🧪", "label": "Test Auth", "desc": "Auth tests"},
-            {"icon": "🐳", "label": "Docker", "desc": "With Redis"},
-        ]
-    elif any(word in context_lower for word in ["react", "frontend", "ui"]):
-        return [
-            {"icon": "🎨", "label": "Styling", "desc": "Tailwind CSS"},
-            {"icon": "📱", "label": "Responsive", "desc": "Mobile ready"},
-            {"icon": "⚡", "label": "Optimize", "desc": "Performance"},
-            {"icon": "🧪", "label": "Tests", "desc": "Component tests"},
-            {"icon": "🚀", "label": "Deploy", "desc": "Vercel/Netlify"},
-        ]
-    else:
-        return [
-            {"icon": "🚀", "label": "Build API", "desc": "REST backend"},
-            {"icon": "🎨", "label": "Build UI", "desc": "Frontend"},
-            {"icon": "🛠️", "label": "CLI Tool", "desc": "Command line"},
-            {"icon": "🤖", "label": "Bot", "desc": "Discord/Slack"},
-            {"icon": "📊", "label": "Dashboard", "desc": "Data viz"},
-        ]
+# Import from our local sparks module
+from .sparks import generate_sparks
 
 
 # =============================================================================
@@ -277,10 +233,10 @@ class VibeCodeApp(App):
         self.connector = self._create_connector()
         self.query_one("#chat-input", Input).focus()
 
-    def _create_connector(self) -> UnifiedAIWrapper:
+    def _create_connector(self) -> NexusConnector:
         """Create a new connector."""
         api_key = os.getenv(f"{self.provider.upper()}_API_KEY", "")
-        return UnifiedAIWrapper(
+        return NexusConnector(
             provider=self.provider,
             api_key=api_key,
             workspace=str(Path.cwd()),
@@ -301,7 +257,7 @@ class VibeCodeApp(App):
                     spark = sparks[i]
                     btn.label = f"{spark['icon']} {spark['label']}"
                     btn.spark_label = spark['label']
-                    btn.spark_desc = spark['desc']
+                    btn.spark_desc = spark.get('desc', '')
 
         # Update second row (remaining sparks)
         if len(spark_rows) >= 2:
@@ -312,7 +268,7 @@ class VibeCodeApp(App):
                     spark = sparks[idx]
                     btn.label = f"{spark['icon']} {spark['label']}"
                     btn.spark_label = spark['label']
-                    btn.spark_desc = spark['desc']
+                    btn.spark_desc = spark.get('desc', '')
 
     def _add_message(self, role: str, content: str) -> None:
         """Add a message to the chat."""

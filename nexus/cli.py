@@ -1,8 +1,8 @@
 """
-Nexus CLI - Command-line interface for The Nexus Connector.
+Nexus CLI - Command-line interface for The Nexus Connector library.
 
-Provides interactive chat, task execution, streaming, and provider comparison.
-Designed as a backend-ready interface that any UI can build on.
+This is the core library CLI with essential commands.
+For application-level tools (vibe, devtools), install nexus-connector[apps].
 """
 
 import asyncio
@@ -11,6 +11,8 @@ import os
 import sys
 import select
 from datetime import datetime
+from pathlib import Path
+from typing import Optional, List, Dict, Any
 
 # Load .env file automatically
 try:
@@ -18,8 +20,6 @@ try:
     load_dotenv()
 except ImportError:
     pass
-from pathlib import Path
-from typing import Optional, List, Dict, Any
 
 import click
 from rich.console import Console
@@ -27,8 +27,6 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from rich.live import Live
-from rich.text import Text
 
 try:
     import yaml
@@ -48,13 +46,16 @@ HISTORY_DIR = NEXUS_DIR / "history"
 CONFIG_FILE = NEXUS_DIR / "config.yaml"
 
 
+# =============================================================================
+# CONFIG HELPERS
+# =============================================================================
+
 def load_config() -> Dict[str, Any]:
     """Load config from ~/.nexus/config.yaml"""
     if not CONFIG_FILE.exists():
         return {}
 
     if not HAS_YAML:
-        # Fallback: try JSON format
         json_config = NEXUS_DIR / "config.json"
         if json_config.exists():
             with open(json_config) as f:
@@ -76,7 +77,6 @@ def save_config(config: Dict[str, Any]) -> None:
         with open(CONFIG_FILE, "w") as f:
             yaml.dump(config, f, default_flow_style=False)
     else:
-        # Fallback to JSON
         with open(NEXUS_DIR / "config.json", "w") as f:
             json.dump(config, f, indent=2)
 
@@ -105,10 +105,9 @@ def has_stdin_data() -> bool:
     """Check if there's data available on stdin (for piping)."""
     if sys.stdin.isatty():
         return False
-    # Check if there's data to read
     if hasattr(select, 'select'):
         return select.select([sys.stdin], [], [], 0.0)[0] != []
-    return True  # Assume there's data on non-tty
+    return True
 
 
 def get_api_key(provider: str) -> Optional[str]:
@@ -119,16 +118,12 @@ def get_api_key(provider: str) -> Optional[str]:
         "google": "GOOGLE_API_KEY",
         "xai": "XAI_API_KEY",
         "deepseek": "DEEPSEEK_API_KEY",
-        "ollama": "OLLAMA_API_KEY",  # Usually not needed
+        "ollama": "OLLAMA_API_KEY",
     }
     env_var = env_map.get(provider.lower(), f"{provider.upper()}_API_KEY")
-
-    # Check environment first
     key = os.getenv(env_var)
     if key:
         return key
-
-    # Fall back to config
     config = load_config()
     return config.get("api_keys", {}).get(provider.lower())
 
@@ -156,11 +151,9 @@ def create_connector(provider: str, model: Optional[str] = None, json_output: bo
             console.print(f"Set the {provider.upper()}_API_KEY environment variable or run: nexus config set api_keys.{provider} YOUR_KEY")
         sys.exit(1)
 
-    # Use default model from config if not specified
     if not model:
         model = get_default_model(provider)
 
-    # Extract hooks before passing to wrapper
     on_tool_call = kwargs.pop("on_tool_call", None)
     on_tool_result = kwargs.pop("on_tool_result", None)
     on_step = kwargs.pop("on_step", None)
@@ -173,7 +166,6 @@ def create_connector(provider: str, model: Optional[str] = None, json_output: bo
         **kwargs
     )
 
-    # Set hooks if provided
     if on_tool_call:
         wrapper._on_tool_call = on_tool_call
     if on_tool_result:
@@ -185,6 +177,10 @@ def create_connector(provider: str, model: Optional[str] = None, json_output: bo
 
     return wrapper
 
+
+# =============================================================================
+# MAIN CLI GROUP
+# =============================================================================
 
 @click.group(invoke_without_command=True)
 @click.option("--version", "-v", is_flag=True, help="Show version")
@@ -203,10 +199,9 @@ def cli(ctx, version, output_format):
         nexus --format json run "Create hello.py"
 
     \b
-    For streaming JSON (real-time updates for UIs):
-        nexus --format ndjson run "Build a Flask app"
+    For application tools (vibe, devtools), install:
+        pip install nexus-connector[apps]
     """
-    # Store format in context for subcommands
     ctx.ensure_object(dict)
     ctx.obj["format"] = output_format
     ctx.obj["json"] = output_format in ("json", "ndjson")
@@ -222,6 +217,10 @@ def cli(ctx, version, output_format):
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
+
+# =============================================================================
+# CORE COMMANDS
+# =============================================================================
 
 @cli.command()
 @click.option("--provider", "-p", default="openai", help="AI provider to use")
@@ -257,14 +256,10 @@ def chat(provider: str, model: Optional[str], system: Optional[str], no_stream: 
         border_style="green"
     ))
 
-    # Add system prompt if provided
     if system:
-        connector.conversation_history.append(
-            Message(role="system", content=system)
-        )
+        connector.conversation_history.append(Message(role="system", content=system))
         console.print(f"[dim]System prompt set[/dim]")
 
-    # Load conversation if file provided
     if load:
         try:
             load_path = Path(load)
@@ -273,22 +268,18 @@ def chat(provider: str, model: Optional[str], system: Optional[str], no_stream: 
             with open(load_path) as f:
                 history = json.load(f)
             for msg in history:
-                connector.conversation_history.append(
-                    Message(role=msg["role"], content=msg["content"])
-                )
+                connector.conversation_history.append(Message(role=msg["role"], content=msg["content"]))
             console.print(f"[dim]Loaded {len(history)} messages from {load_path}[/dim]")
         except Exception as e:
             console.print(f"[yellow]Warning: Could not load history: {e}[/yellow]")
 
     while True:
         try:
-            # Get user input
             user_input = console.input("\n[bold cyan]You:[/bold cyan] ").strip()
 
             if not user_input:
                 continue
 
-            # Handle special commands
             if user_input.lower() in ("exit", "quit", "/exit", "/quit"):
                 console.print("[dim]Goodbye![/dim]")
                 break
@@ -345,11 +336,7 @@ def chat(provider: str, model: Optional[str], system: Optional[str], no_stream: 
                 if len(parts) < 2:
                     console.print("[yellow]Usage: /system <prompt>[/yellow]")
                     continue
-                from .core.base_connector import Message
-                # Remove existing system message and add new one
-                connector.conversation_history = [
-                    m for m in connector.conversation_history if m.role != "system"
-                ]
+                connector.conversation_history = [m for m in connector.conversation_history if m.role != "system"]
                 connector.conversation_history.insert(0, Message(role="system", content=parts[1]))
                 console.print("[dim]System prompt updated[/dim]")
                 continue
@@ -374,67 +361,45 @@ def chat(provider: str, model: Optional[str], system: Optional[str], no_stream: 
                 try:
                     old_history = connector.get_history()
                     connector = create_connector(new_provider, new_model, verbose=False)
-                    # Optionally restore history (without system message)
-                    from .core.base_connector import Message
                     for msg in old_history:
                         if msg["role"] != "system":
-                            connector.conversation_history.append(
-                                Message(role=msg["role"], content=msg["content"])
-                            )
+                            connector.conversation_history.append(Message(role=msg["role"], content=msg["content"]))
                     console.print(f"[green]Switched to {new_provider} ({connector.connector.model})[/green]")
                 except Exception as e:
                     console.print(f"[red]Failed to switch: {e}[/red]")
                 continue
 
-            # Send message and display response
             console.print("\n[bold green]Assistant:[/bold green] ", end="")
 
             try:
                 if no_stream:
-                    # Non-streaming mode
                     response = asyncio.run(connector.send_message(user_input))
                     content = response.get("content", "")
                     if content:
                         console.print(Markdown(content))
                     usage = response.get("usage", {})
                 else:
-                    # Streaming mode (default) - show tokens as they arrive
-                    from .core.base_connector import Message
-
-                    # Add to history first
-                    connector.conversation_history.append(
-                        Message(role="user", content=user_input)
-                    )
-
+                    connector.conversation_history.append(Message(role="user", content=user_input))
                     full_response = ""
+
                     async def do_stream():
                         nonlocal full_response
-                        async for chunk in connector.connector.stream_message(
-                            connector.conversation_history
-                        ):
+                        async for chunk in connector.connector.stream_message(connector.conversation_history):
                             console.print(chunk, end="")
                             full_response += chunk
 
                     asyncio.run(do_stream())
-                    console.print()  # Newline after streaming
+                    console.print()
 
-                    # Add assistant response to history
                     if full_response:
-                        connector.conversation_history.append(
-                            Message(role="assistant", content=full_response)
-                        )
+                        connector.conversation_history.append(Message(role="assistant", content=full_response))
 
-                    # Estimate tokens for streaming (no usage data available)
-                    usage = {
-                        "total_tokens": len(user_input.split()) + len(full_response.split()) * 2
-                    }
+                    usage = {"total_tokens": len(user_input.split()) + len(full_response.split()) * 2}
 
-                # Show token usage
                 if usage:
                     total = usage.get("total_tokens", 0)
                     if total:
-                        # Estimate cost (rough)
-                        cost = total * 0.00001  # ~$0.01 per 1K tokens average
+                        cost = total * 0.00001
                         console.print(f"\n[dim]Tokens: ~{total} | Cost: ~${cost:.4f}[/dim]")
 
             except Exception as e:
@@ -461,35 +426,28 @@ def run(ctx, task: str, provider: Optional[str], model: Optional[str], output: O
     """
     Execute a one-shot task.
 
-    \b
     Examples:
         nexus run "Create a Python script that sorts a list"
         nexus run "Build a Flask API" --provider anthropic
         nexus --format json run "Create hello.py"
-        nexus --format ndjson run "Build a todo app"  # Real-time JSON events
     """
     output_format = ctx.obj.get("format", "text") if ctx.obj else "text"
     json_output = output_format in ("json", "ndjson")
     ndjson = output_format == "ndjson"
 
-    # Get provider from args or config
     if not provider:
         provider = get_default_provider()
 
     workspace = Path(output) if output else Path.cwd()
-
-    # Track tool calls for live display
     current_step = [0]
     tool_count = [0]
-    tool_log = []  # For JSON output
+    tool_log = []
 
     def on_tool_call(tc):
-        """Show tool calls as they happen."""
         tool_count[0] += 1
         name = tc.get("name", "unknown")
         args = tc.get("arguments", {})
 
-        # Log for JSON output
         tool_entry = {
             "event": "tool_call",
             "step": current_step[0],
@@ -506,7 +464,6 @@ def run(ctx, task: str, provider: Optional[str], model: Optional[str], output: O
         if json_output or quiet:
             return
 
-        # Get relevant arg to display
         if "path" in args:
             detail = args["path"]
         elif "command" in args:
@@ -517,13 +474,9 @@ def run(ctx, task: str, provider: Optional[str], model: Optional[str], output: O
             detail = ""
 
         icon = {
-            "create_file": "📝",
-            "write_file": "📝",
-            "read_file": "📖",
-            "execute_command": "⚡",
-            "run_command": "⚡",
-            "list_directory": "📁",
-            "search_files": "🔍",
+            "create_file": "📝", "write_file": "📝", "read_file": "📖",
+            "execute_command": "⚡", "run_command": "⚡",
+            "list_directory": "📁", "search_files": "🔍",
         }.get(name, "🔧")
 
         if detail:
@@ -532,9 +485,7 @@ def run(ctx, task: str, provider: Optional[str], model: Optional[str], output: O
             console.print(f"  {icon} [cyan]{name}[/cyan]")
 
     def on_tool_result(tr):
-        """Show tool results."""
         success = tr.get("success", True)
-
         result_entry = {
             "event": "tool_result",
             "step": current_step[0],
@@ -543,7 +494,6 @@ def run(ctx, task: str, provider: Optional[str], model: Optional[str], output: O
         }
         if not success:
             result_entry["error"] = tr.get("error", "Unknown error")
-
         tool_log.append(result_entry)
 
         if ndjson:
@@ -555,15 +505,8 @@ def run(ctx, task: str, provider: Optional[str], model: Optional[str], output: O
             console.print(f"    [red]✗ {error}[/red]")
 
     def on_step(step, status):
-        """Show iteration progress."""
         current_step[0] = step
-
-        step_entry = {
-            "event": "step",
-            "step": step,
-            "status": status,
-            "timestamp": datetime.now().isoformat(),
-        }
+        step_entry = {"event": "step", "step": step, "status": status, "timestamp": datetime.now().isoformat()}
 
         if ndjson:
             output_ndjson(step_entry)
@@ -573,15 +516,9 @@ def run(ctx, task: str, provider: Optional[str], model: Optional[str], output: O
             console.print(f"\n[dim]Step {step}[/dim]")
 
     connector = create_connector(
-        provider,
-        model,
-        json_output=json_output,
-        workspace=workspace,
-        max_iterations=max_iterations,
-        verbose=verbose,
-        on_tool_call=on_tool_call,
-        on_tool_result=on_tool_result,
-        on_step=on_step,
+        provider, model, json_output=json_output, workspace=workspace,
+        max_iterations=max_iterations, verbose=verbose,
+        on_tool_call=on_tool_call, on_tool_result=on_tool_result, on_step=on_step,
     )
 
     if not quiet and not json_output:
@@ -604,10 +541,8 @@ def run(ctx, task: str, provider: Optional[str], model: Optional[str], output: O
             console.print(f"\n[red]Error: {e}[/red]")
         sys.exit(1)
 
-    # Calculate cost
-    cost = result.tokens_used * 0.00001  # ~$0.01 per 1K tokens average
+    cost = result.tokens_used * 0.00001
 
-    # JSON output
     if json_output:
         final_result = {
             "event": "complete" if not ndjson else None,
@@ -629,16 +564,12 @@ def run(ctx, task: str, provider: Optional[str], model: Optional[str], output: O
         if result.error:
             final_result["error"] = result.error
         if not ndjson:
-            # Regular JSON: include tool log
             final_result["tool_log"] = tool_log
         else:
-            # NDJSON: output final event
             final_result["event"] = "complete"
-
         output_json(final_result, pretty=not ndjson)
         sys.exit(0 if result.success else 1)
 
-    # Text output
     if result.success:
         console.print("\n[bold green]✓ Task completed successfully[/bold green]")
     else:
@@ -646,7 +577,6 @@ def run(ctx, task: str, provider: Optional[str], model: Optional[str], output: O
         if result.error:
             console.print(f"[red]Error: {result.error}[/red]")
 
-    # Show created files
     if result.files_created and not quiet:
         console.print("\n[bold]Files created:[/bold]")
         for f in result.files_created:
@@ -657,14 +587,9 @@ def run(ctx, task: str, provider: Optional[str], model: Optional[str], output: O
         for f in result.files_modified:
             console.print(f"  ✏️  {f}")
 
-    # Show metrics with cost estimate
-    console.print(f"\n[dim]Steps: {result.iterations} | "
-                  f"Tools: {tool_count[0]} | "
-                  f"Tokens: {result.tokens_used} | "
-                  f"Cost: ~${cost:.4f} | "
-                  f"Time: {result.duration:.1f}s[/dim]")
+    console.print(f"\n[dim]Steps: {result.iterations} | Tools: {tool_count[0]} | "
+                  f"Tokens: {result.tokens_used} | Cost: ~${cost:.4f} | Time: {result.duration:.1f}s[/dim]")
 
-    # Show final content
     if result.content and verbose:
         console.print("\n[bold]Output:[/bold]")
         console.print(Markdown(result.content))
@@ -692,14 +617,13 @@ def stream(prompt: str, provider: str, model: Optional[str]):
             console.print(chunk, end="")
 
     asyncio.run(do_stream())
-    console.print()  # Final newline
+    console.print()
 
 
 @cli.command()
 @click.argument("prompt")
-@click.option("--providers", "-p", default="openai,anthropic",
-              help="Comma-separated list of providers to compare")
-@click.option("--model", "-m", default=None, help="Model to use (same for all)")
+@click.option("--providers", "-p", default="openai,anthropic", help="Comma-separated list of providers")
+@click.option("--model", "-m", default=None, help="Model to use")
 def compare(prompt: str, providers: str, model: Optional[str]):
     """
     Compare responses across multiple providers.
@@ -718,14 +642,9 @@ def compare(prompt: str, providers: str, model: Optional[str]):
 
     results = []
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
         for provider in provider_list:
             task = progress.add_task(f"Querying {provider}...", total=None)
-
             try:
                 connector = create_connector(provider, model, verbose=False)
                 import time
@@ -742,19 +661,13 @@ def compare(prompt: str, providers: str, model: Optional[str]):
                     "error": None
                 })
                 progress.update(task, description=f"[green]✓ {provider}[/green]")
-
             except Exception as e:
                 results.append({
-                    "provider": provider,
-                    "model": model,
-                    "content": "",
-                    "tokens": 0,
-                    "duration": 0,
-                    "error": str(e)
+                    "provider": provider, "model": model, "content": "",
+                    "tokens": 0, "duration": 0, "error": str(e)
                 })
                 progress.update(task, description=f"[red]✗ {provider}: {e}[/red]")
 
-    # Display comparison table
     console.print("\n")
     table = Table(title="Comparison Results", show_lines=True)
     table.add_column("Provider", style="cyan")
@@ -766,24 +679,89 @@ def compare(prompt: str, providers: str, model: Optional[str]):
         if r["error"]:
             table.add_row(r["provider"], "-", "-", f"[red]{r['error'][:30]}...[/red]")
         else:
-            table.add_row(
-                r["provider"],
-                r["model"],
-                str(r["tokens"]),
-                f"{r['duration']:.2f}s"
-            )
+            table.add_row(r["provider"], r["model"], str(r["tokens"]), f"{r['duration']:.2f}s")
 
     console.print(table)
 
-    # Display responses
     for r in results:
         if r["content"]:
-            console.print(Panel(
-                Markdown(r["content"]),
-                title=f"{r['provider']} ({r['model']})",
-                border_style="blue"
-            ))
+            console.print(Panel(Markdown(r["content"]), title=f"{r['provider']} ({r['model']})", border_style="blue"))
 
+
+@cli.command()
+@click.argument("prompt", required=False)
+@click.option("--provider", "-p", default=None, help="AI provider to use")
+@click.option("--model", "-m", default=None, help="Model to use")
+@click.option("--system", "-s", default=None, help="System prompt")
+@click.pass_context
+def ask(ctx, prompt: Optional[str], provider: Optional[str], model: Optional[str], system: Optional[str]):
+    """
+    Quick one-shot question (no task execution, just chat).
+
+    Examples:
+        nexus ask "What is Python?"
+        echo "Explain Docker" | nexus ask
+        nexus --format json ask "What is 2+2?"
+    """
+    json_output = ctx.obj.get("json", False) if ctx.obj else False
+
+    if not provider:
+        provider = get_default_provider()
+
+    if not prompt:
+        if has_stdin_data():
+            prompt = sys.stdin.read().strip()
+        else:
+            if json_output:
+                output_json({"error": "No prompt provided"})
+            else:
+                console.print("[red]Error:[/red] No prompt provided. Use: nexus ask \"your question\"")
+            sys.exit(1)
+
+    if not prompt:
+        if json_output:
+            output_json({"error": "Empty prompt"})
+        else:
+            console.print("[red]Error:[/red] Empty prompt")
+        sys.exit(1)
+
+    connector = create_connector(provider, model, json_output=json_output, verbose=False)
+
+    if system:
+        from .core.base_connector import Message
+        connector.conversation_history.append(Message(role="system", content=system))
+
+    try:
+        import time
+        start = time.time()
+        response = asyncio.run(connector.send_message(prompt))
+        duration = time.time() - start
+
+        content = response.get("content", "")
+        usage = response.get("usage", {})
+
+        if json_output:
+            output_json({
+                "content": content,
+                "provider": provider,
+                "model": connector.connector.model,
+                "tokens": usage.get("total_tokens", 0),
+                "duration": round(duration, 2),
+            })
+        else:
+            console.print(content)
+
+    except Exception as e:
+        if json_output:
+            output_json({"error": str(e)})
+        else:
+            console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+# =============================================================================
+# UTILITY COMMANDS
+# =============================================================================
 
 @cli.command()
 @click.option("--port", "-p", default=8000, help="Port to run on")
@@ -813,7 +791,6 @@ def serve(port: int, host: str, provider: str, model: Optional[str], reload: boo
 
     try:
         from .web import WebConnector
-
         connector = WebConnector(
             provider=AIProvider(provider.lower()),
             api_key=api_key,
@@ -822,7 +799,6 @@ def serve(port: int, host: str, provider: str, model: Optional[str], reload: boo
             host=host
         )
         connector.run(reload=reload)
-
     except ImportError:
         console.print("[red]Error:[/red] Web components not installed")
         console.print("Install with: pip install nexus-connector[web]")
@@ -842,17 +818,9 @@ def list_providers():
         env_var = f"{provider.value.upper()}_API_KEY"
         has_key = bool(os.getenv(env_var))
         status = "[green]✓ Configured[/green]" if has_key else "[dim]Not configured[/dim]"
-
-        # Ollama doesn't need an API key
         if provider == AIProvider.OLLAMA:
             status = "[green]✓ Local[/green]"
-
-        table.add_row(
-            provider.value,
-            provider.display_name,
-            env_var,
-            status
-        )
+        table.add_row(provider.value, provider.display_name, env_var, status)
 
     console.print(table)
 
@@ -870,102 +838,20 @@ def list_tools():
     table.add_column("Description")
     table.add_column("Destructive", justify="center")
 
-    # Get tools from registry
     for metadata in executor.registry.get_all():
         destructive = "[red]Yes[/red]" if metadata.is_destructive else "[dim]No[/dim]"
-        table.add_row(
-            metadata.name,
-            metadata.category,
-            metadata.description,
-            destructive
-        )
+        table.add_row(metadata.name, metadata.category, metadata.description, destructive)
 
     console.print(table)
 
-    # Show category summary
     categories = executor.registry.get_categories()
     if categories:
         console.print(f"\n[dim]Categories: {', '.join(categories)}[/dim]")
 
 
-@cli.command()
-@click.argument("prompt", required=False)
-@click.option("--provider", "-p", default=None, help="AI provider to use")
-@click.option("--model", "-m", default=None, help="Model to use")
-@click.option("--system", "-s", default=None, help="System prompt")
-@click.pass_context
-def ask(ctx, prompt: Optional[str], provider: Optional[str], model: Optional[str], system: Optional[str]):
-    """
-    Quick one-shot question (no task execution, just chat).
-
-    Supports piping from stdin for scripting.
-
-    \b
-    Examples:
-        nexus ask "What is Python?"
-        echo "Explain Docker" | nexus ask
-        cat question.txt | nexus ask --provider anthropic
-        nexus --format json ask "What is 2+2?"
-    """
-    json_output = ctx.obj.get("json", False) if ctx.obj else False
-
-    # Get provider from args, config, or default
-    if not provider:
-        provider = get_default_provider()
-
-    # Get prompt from argument or stdin
-    if not prompt:
-        if has_stdin_data():
-            prompt = sys.stdin.read().strip()
-        else:
-            if json_output:
-                output_json({"error": "No prompt provided"})
-            else:
-                console.print("[red]Error:[/red] No prompt provided. Use: nexus ask \"your question\"")
-            sys.exit(1)
-
-    if not prompt:
-        if json_output:
-            output_json({"error": "Empty prompt"})
-        else:
-            console.print("[red]Error:[/red] Empty prompt")
-        sys.exit(1)
-
-    connector = create_connector(provider, model, json_output=json_output, verbose=False)
-
-    # Add system prompt if provided
-    if system:
-        from .core.base_connector import Message
-        connector.conversation_history.append(Message(role="system", content=system))
-
-    try:
-        import time
-        start = time.time()
-        response = asyncio.run(connector.send_message(prompt))
-        duration = time.time() - start
-
-        content = response.get("content", "")
-        usage = response.get("usage", {})
-
-        if json_output:
-            output_json({
-                "content": content,
-                "provider": provider,
-                "model": connector.connector.model,
-                "tokens": usage.get("total_tokens", 0),
-                "duration": round(duration, 2),
-            })
-        else:
-            # Plain text output for piping
-            console.print(content)
-
-    except Exception as e:
-        if json_output:
-            output_json({"error": str(e)})
-        else:
-            console.print(f"[red]Error:[/red] {e}")
-        sys.exit(1)
-
+# =============================================================================
+# CONFIG COMMANDS
+# =============================================================================
 
 @cli.group()
 def config():
@@ -975,7 +861,6 @@ def config():
     \b
     Store defaults in ~/.nexus/config.yaml:
         nexus config set defaults.provider anthropic
-        nexus config set api_keys.openai sk-xxx
         nexus config get defaults.provider
         nexus config list
     """
@@ -986,28 +871,16 @@ def config():
 @click.argument("key")
 @click.argument("value")
 def config_set(key: str, value: str):
-    """
-    Set a configuration value.
-
-    \b
-    Examples:
-        nexus config set defaults.provider anthropic
-        nexus config set defaults.models.openai gpt-4o
-        nexus config set api_keys.openai sk-xxx
-    """
+    """Set a configuration value."""
     cfg = load_config()
-
-    # Parse dotted key path
     keys = key.split(".")
     current = cfg
 
-    # Navigate/create nested structure
     for k in keys[:-1]:
         if k not in current:
             current[k] = {}
         current = current[k]
 
-    # Set the value (try to parse as JSON for complex types)
     try:
         parsed = json.loads(value)
         current[keys[-1]] = parsed
@@ -1022,18 +895,9 @@ def config_set(key: str, value: str):
 @click.argument("key")
 @click.pass_context
 def config_get(ctx, key: str):
-    """
-    Get a configuration value.
-
-    \b
-    Examples:
-        nexus config get defaults.provider
-        nexus config get api_keys.openai
-    """
+    """Get a configuration value."""
     json_output = ctx.obj.get("json", False) if ctx.obj else False
     cfg = load_config()
-
-    # Parse dotted key path
     keys = key.split(".")
     current = cfg
 
@@ -1048,7 +912,6 @@ def config_get(ctx, key: str):
                 console.print(json.dumps(current, indent=2))
             else:
                 console.print(str(current))
-
     except (KeyError, TypeError):
         if json_output:
             output_json({"error": f"Key not found: {key}"})
@@ -1065,7 +928,6 @@ def config_list(ctx):
     cfg = load_config()
 
     if json_output:
-        # Mask API keys in JSON output
         safe_cfg = cfg.copy()
         if "api_keys" in safe_cfg:
             safe_cfg["api_keys"] = {k: "***" for k in safe_cfg["api_keys"]}
@@ -1075,13 +937,8 @@ def config_list(ctx):
             console.print("[dim]No configuration set. Use 'nexus config set' to configure.[/dim]")
             return
 
-        console.print(Panel(
-            f"[bold]Config file:[/bold] {CONFIG_FILE}",
-            title="Nexus Configuration",
-            border_style="blue"
-        ))
+        console.print(Panel(f"[bold]Config file:[/bold] {CONFIG_FILE}", title="Nexus Configuration", border_style="blue"))
 
-        # Show defaults
         if "defaults" in cfg:
             console.print("\n[bold]Defaults:[/bold]")
             for k, v in cfg["defaults"].items():
@@ -1092,7 +949,6 @@ def config_list(ctx):
                 else:
                     console.print(f"  {k}: {v}")
 
-        # Show API keys (masked)
         if "api_keys" in cfg:
             console.print("\n[bold]API Keys:[/bold]")
             for k, v in cfg["api_keys"].items():
@@ -1103,16 +959,8 @@ def config_list(ctx):
 @config.command("unset")
 @click.argument("key")
 def config_unset(key: str):
-    """
-    Remove a configuration value.
-
-    \b
-    Example:
-        nexus config unset defaults.provider
-    """
+    """Remove a configuration value."""
     cfg = load_config()
-
-    # Parse dotted key path
     keys = key.split(".")
     current = cfg
 
@@ -1131,15 +979,7 @@ def config_unset(key: str):
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing config")
 @click.pass_context
 def init(ctx, provider: str, force: bool):
-    """
-    Initialize Nexus configuration.
-
-    Creates ~/.nexus/config.yaml with sensible defaults.
-
-    \b
-    Example:
-        nexus init --provider anthropic
-    """
+    """Initialize Nexus configuration."""
     json_output = ctx.obj.get("json", False) if ctx.obj else False
 
     if CONFIG_FILE.exists() and not force:
@@ -1150,7 +990,6 @@ def init(ctx, provider: str, force: bool):
             console.print("Use --force to overwrite")
         sys.exit(1)
 
-    # Create default config
     NEXUS_DIR.mkdir(parents=True, exist_ok=True)
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1164,19 +1003,13 @@ def init(ctx, provider: str, force: bool):
                 "deepseek": "deepseek-chat",
             }
         },
-        "api_keys": {
-            # Empty - user should set these
-        }
+        "api_keys": {}
     }
 
     save_config(default_config)
 
     if json_output:
-        output_json({
-            "success": True,
-            "config_path": str(CONFIG_FILE),
-            "default_provider": provider,
-        })
+        output_json({"success": True, "config_path": str(CONFIG_FILE), "default_provider": provider})
     else:
         console.print(Panel(
             f"[bold green]Nexus initialized![/bold green]\n\n"
@@ -1197,15 +1030,9 @@ def init(ctx, provider: str, force: bool):
 @cli.command()
 @click.pass_context
 def status(ctx):
-    """
-    Show Nexus status and configuration summary.
-
-    Quick overview of what's configured and ready to use.
-    """
+    """Show Nexus status and configuration summary."""
     json_output = ctx.obj.get("json", False) if ctx.obj else False
-    cfg = load_config()
 
-    # Check providers
     providers_status = {}
     for provider in AIProvider:
         has_key = bool(get_api_key(provider.value))
@@ -1229,13 +1056,8 @@ def status(ctx):
         })
     else:
         from ._version import __version__
+        console.print(Panel(f"[bold]Nexus Connector[/bold] v{__version__}", border_style="blue"))
 
-        console.print(Panel(
-            f"[bold]Nexus Connector[/bold] v{__version__}",
-            border_style="blue"
-        ))
-
-        # Config status
         if config_exists:
             console.print(f"[green]✓[/green] Config: {CONFIG_FILE}")
         else:
@@ -1243,12 +1065,11 @@ def status(ctx):
 
         console.print(f"[green]✓[/green] Default provider: {default_provider}")
 
-        # Provider status
         console.print("\n[bold]Providers:[/bold]")
-        for provider, status in providers_status.items():
-            if status == "ready":
+        for provider, pstatus in providers_status.items():
+            if pstatus == "ready":
                 console.print(f"  [green]✓[/green] {provider}")
-            elif status == "local":
+            elif pstatus == "local":
                 console.print(f"  [green]✓[/green] {provider} (local)")
             else:
                 console.print(f"  [dim]○[/dim] {provider}")
@@ -1256,926 +1077,69 @@ def status(ctx):
         ready_count = sum(1 for v in providers_status.values() if v in ("ready", "local"))
         console.print(f"\n[dim]{ready_count} provider(s) ready[/dim]")
 
-
-# =============================================================================
-# DEVELOPER TOOLS
-# =============================================================================
-# These commands provide readable terminal UX for common dev tasks.
-
-
-def read_file_content(filepath: str) -> tuple[str, str]:
-    """Read file content and detect language from extension."""
-    path = Path(filepath)
-    if not path.exists():
-        raise click.ClickException(f"File not found: {filepath}")
-
-    content = path.read_text()
-
-    # Detect language from extension
-    ext_map = {
-        ".py": "python",
-        ".js": "javascript",
-        ".ts": "typescript",
-        ".tsx": "typescript",
-        ".jsx": "javascript",
-        ".go": "go",
-        ".rs": "rust",
-        ".rb": "ruby",
-        ".java": "java",
-        ".cpp": "cpp",
-        ".c": "c",
-        ".h": "c",
-        ".cs": "csharp",
-        ".php": "php",
-        ".swift": "swift",
-        ".kt": "kotlin",
-        ".scala": "scala",
-        ".sh": "bash",
-        ".bash": "bash",
-        ".zsh": "zsh",
-        ".sql": "sql",
-        ".html": "html",
-        ".css": "css",
-        ".json": "json",
-        ".yaml": "yaml",
-        ".yml": "yaml",
-        ".md": "markdown",
-        ".toml": "toml",
-    }
-    lang = ext_map.get(path.suffix.lower(), "text")
-
-    return content, lang
-
-
-def get_project_context() -> Dict[str, Any]:
-    """Gather project context from current directory."""
-    cwd = Path.cwd()
-    context = {
-        "directory": str(cwd),
-        "project_type": None,
-        "files": [],
-    }
-
-    # Detect project type
-    if (cwd / "package.json").exists():
-        context["project_type"] = "node"
-    elif (cwd / "pyproject.toml").exists() or (cwd / "setup.py").exists():
-        context["project_type"] = "python"
-    elif (cwd / "Cargo.toml").exists():
-        context["project_type"] = "rust"
-    elif (cwd / "go.mod").exists():
-        context["project_type"] = "go"
-    elif (cwd / "Gemfile").exists():
-        context["project_type"] = "ruby"
-
-    return context
-
-
-def stream_ai_response(connector, prompt: str, panel_title: str = "Response") -> str:
-    """Stream AI response with nice terminal output."""
-    from .core.base_connector import Message
-
-    connector.conversation_history.append(Message(role="user", content=prompt))
-
-    full_response = ""
-
-    async def do_stream():
-        nonlocal full_response
-        async for chunk in connector.connector.stream_message(
-            connector.conversation_history
-        ):
-            console.print(chunk, end="")
-            full_response += chunk
-
-    console.print(f"\n[bold cyan]{'─' * 60}[/bold cyan]")
-    asyncio.run(do_stream())
-    console.print(f"\n[bold cyan]{'─' * 60}[/bold cyan]\n")
-
-    # Add to history
-    if full_response:
-        connector.conversation_history.append(
-            Message(role="assistant", content=full_response)
-        )
-
-    return full_response
-
-
-@cli.command()
-@click.argument("file", type=click.Path(exists=True))
-@click.option("--provider", "-p", default=None, help="AI provider")
-@click.option("--focus", "-f", type=click.Choice(["security", "performance", "style", "bugs", "all"]),
-              default="all", help="Review focus area")
-@click.pass_context
-def review(ctx, file: str, provider: Optional[str], focus: str):
-    """
-    AI-powered code review.
-
-    Analyzes code for bugs, security issues, style, and improvements.
-
-    \b
-    Examples:
-        nexus review src/api.py
-        nexus review main.go --focus security
-        nexus review app.ts --focus performance
-    """
-    if not provider:
-        provider = get_default_provider()
-
-    content, lang = read_file_content(file)
-    filename = Path(file).name
-
-    # Build focused prompt
-    focus_instructions = {
-        "security": "Focus specifically on security vulnerabilities, injection risks, authentication issues, and data exposure.",
-        "performance": "Focus specifically on performance bottlenecks, memory leaks, inefficient algorithms, and optimization opportunities.",
-        "style": "Focus specifically on code style, naming conventions, readability, and adherence to best practices.",
-        "bugs": "Focus specifically on potential bugs, edge cases, error handling, and logical errors.",
-        "all": "Review all aspects: bugs, security, performance, style, and general improvements."
-    }
-
-    console.print(Panel(
-        f"[bold]File:[/bold] {file}\n"
-        f"[bold]Language:[/bold] {lang}\n"
-        f"[bold]Focus:[/bold] {focus}\n"
-        f"[bold]Lines:[/bold] {len(content.splitlines())}",
-        title="🔍 Code Review",
-        border_style="blue"
-    ))
-
-    connector = create_connector(provider, verbose=False)
-
-    prompt = f"""Review this {lang} code from `{filename}`.
-
-{focus_instructions[focus]}
-
-Structure your review as:
-
-## Summary
-Brief overall assessment (1-2 sentences)
-
-## Issues Found
-List each issue with:
-- 🔴 **Critical**: [description] (line X)
-- 🟡 **Warning**: [description] (line X)
-- 🔵 **Suggestion**: [description] (line X)
-
-## Recommendations
-Top 3 actionable improvements
-
----
-
-```{lang}
-{content}
-```"""
-
-    stream_ai_response(connector, prompt, "Review Results")
-
-
-@cli.command()
-@click.argument("file", type=click.Path(exists=True))
-@click.option("--provider", "-p", default=None, help="AI provider")
-@click.option("--framework", "-f", default=None, help="Test framework (pytest, jest, go test, etc.)")
-@click.option("--output", "-o", default=None, help="Output file for generated tests")
-@click.pass_context
-def test(ctx, file: str, provider: Optional[str], framework: Optional[str], output: Optional[str]):
-    """
-    Generate tests for a file.
-
-    Creates unit tests based on the code structure.
-
-    \b
-    Examples:
-        nexus test src/utils.py
-        nexus test api.ts --framework jest
-        nexus test main.go -o main_test.go
-    """
-    if not provider:
-        provider = get_default_provider()
-
-    content, lang = read_file_content(file)
-    filename = Path(file).name
-
-    # Auto-detect test framework
-    if not framework:
-        framework_map = {
-            "python": "pytest",
-            "javascript": "jest",
-            "typescript": "jest",
-            "go": "go test",
-            "rust": "cargo test",
-            "ruby": "rspec",
-            "java": "junit",
-        }
-        framework = framework_map.get(lang, "standard unit tests")
-
-    console.print(Panel(
-        f"[bold]File:[/bold] {file}\n"
-        f"[bold]Language:[/bold] {lang}\n"
-        f"[bold]Framework:[/bold] {framework}",
-        title="🧪 Generate Tests",
-        border_style="green"
-    ))
-
-    connector = create_connector(provider, verbose=False)
-
-    prompt = f"""Generate comprehensive unit tests for this {lang} code using {framework}.
-
-Requirements:
-1. Test all public functions/methods
-2. Include edge cases and error conditions
-3. Use descriptive test names
-4. Add brief comments explaining what each test verifies
-5. Follow {framework} best practices
-
-Structure:
-- Setup/fixtures if needed
-- Happy path tests
-- Edge case tests
-- Error handling tests
-
----
-
-```{lang}
-{content}
-```
-
-Generate the complete test file:"""
-
-    response = stream_ai_response(connector, prompt, "Generated Tests")
-
-    # Extract code block if present
-    if "```" in response:
-        import re
-        code_match = re.search(r'```(?:\w+)?\n(.*?)```', response, re.DOTALL)
-        if code_match:
-            test_code = code_match.group(1).strip()
-
-            if output:
-                Path(output).write_text(test_code)
-                console.print(f"\n[green]✓[/green] Tests written to: {output}")
-            else:
-                # Suggest output file
-                suggested = Path(file).stem + "_test" + Path(file).suffix
-                console.print(f"\n[dim]Tip: Use -o {suggested} to save tests to a file[/dim]")
-
-
-@cli.command()
-@click.argument("file", type=click.Path(exists=True))
-@click.option("--provider", "-p", default=None, help="AI provider")
-@click.option("--style", "-s", type=click.Choice(["docstring", "markdown", "readme", "api"]),
-              default="docstring", help="Documentation style")
-@click.option("--output", "-o", default=None, help="Output file")
-@click.pass_context
-def docs(ctx, file: str, provider: Optional[str], style: str, output: Optional[str]):
-    """
-    Generate documentation for a file.
-
-    Creates docstrings, markdown docs, or API reference.
-
-    \b
-    Examples:
-        nexus docs src/api.py
-        nexus docs lib/utils.ts --style markdown
-        nexus docs handlers.go --style api -o API.md
-    """
-    if not provider:
-        provider = get_default_provider()
-
-    content, lang = read_file_content(file)
-    filename = Path(file).name
-
-    style_instructions = {
-        "docstring": f"Add comprehensive docstrings/comments to all functions, classes, and modules following {lang} conventions.",
-        "markdown": "Create a markdown document explaining the code with sections for Overview, Functions/Classes, Usage Examples, and Notes.",
-        "readme": "Create a README.md style document with installation, usage examples, and API overview.",
-        "api": "Create API reference documentation with all public interfaces, parameters, return types, and examples.",
-    }
-
-    console.print(Panel(
-        f"[bold]File:[/bold] {file}\n"
-        f"[bold]Language:[/bold] {lang}\n"
-        f"[bold]Style:[/bold] {style}",
-        title="📚 Generate Documentation",
-        border_style="yellow"
-    ))
-
-    connector = create_connector(provider, verbose=False)
-
-    prompt = f"""Generate documentation for this {lang} code.
-
-Task: {style_instructions[style]}
-
-Requirements:
-1. Be accurate - only document what the code actually does
-2. Include parameter types and return types
-3. Add usage examples where helpful
-4. Note any important caveats or edge cases
-
----
-
-```{lang}
-{content}
-```
-
-Generate the documentation:"""
-
-    response = stream_ai_response(connector, prompt, "Generated Documentation")
-
-    if output:
-        Path(output).write_text(response)
-        console.print(f"\n[green]✓[/green] Documentation written to: {output}")
-
-
-@cli.command()
-@click.argument("target", required=False)
-@click.option("--provider", "-p", default=None, help="AI provider")
-@click.option("--error", "-e", default=None, help="Error message to explain")
-@click.pass_context
-def explain(ctx, target: Optional[str], provider: Optional[str], error: Optional[str]):
-    """
-    Explain code or errors.
-
-    Can explain a file, code snippet, or error message.
-
-    \b
-    Examples:
-        nexus explain src/complex.py
-        nexus explain --error "TypeError: Cannot read property 'x' of undefined"
-        cat error.log | nexus explain
-    """
-    if not provider:
-        provider = get_default_provider()
-
-    # Determine what to explain
-    if error:
-        # Explain an error message
-        console.print(Panel(
-            f"[bold]Error:[/bold]\n{error[:200]}{'...' if len(error) > 200 else ''}",
-            title="❓ Explain Error",
-            border_style="red"
-        ))
-
-        connector = create_connector(provider, verbose=False)
-        prompt = f"""Explain this error message in plain terms:
-
-```
-{error}
-```
-
-Structure your explanation as:
-
-## What This Error Means
-Simple explanation of what went wrong
-
-## Common Causes
-- Cause 1
-- Cause 2
-- Cause 3
-
-## How To Fix It
-Step-by-step debugging approach
-
-## Example Fix
-Show a code example if applicable"""
-
-    elif target and Path(target).exists():
-        # Explain a file
-        content, lang = read_file_content(target)
-
-        console.print(Panel(
-            f"[bold]File:[/bold] {target}\n"
-            f"[bold]Language:[/bold] {lang}\n"
-            f"[bold]Lines:[/bold] {len(content.splitlines())}",
-            title="❓ Explain Code",
-            border_style="magenta"
-        ))
-
-        connector = create_connector(provider, verbose=False)
-        prompt = f"""Explain this {lang} code clearly.
-
-Structure your explanation as:
-
-## Overview
-What this code does in 1-2 sentences
-
-## How It Works
-Step-by-step walkthrough of the logic
-
-## Key Concepts
-Important patterns, algorithms, or techniques used
-
-## Dependencies
-External libraries or systems it interacts with
-
----
-
-```{lang}
-{content}
-```"""
-
-    elif has_stdin_data():
-        # Explain piped input (likely an error)
-        piped_input = sys.stdin.read().strip()
-
-        console.print(Panel(
-            f"[bold]Input:[/bold]\n{piped_input[:300]}{'...' if len(piped_input) > 300 else ''}",
-            title="❓ Explain",
-            border_style="magenta"
-        ))
-
-        connector = create_connector(provider, verbose=False)
-        prompt = f"""Explain this:
-
-```
-{piped_input}
-```
-
-If it's an error, explain what went wrong and how to fix it.
-If it's code, explain what it does.
-If it's output/logs, explain what happened."""
-
-    else:
-        raise click.ClickException("Provide a file path, --error message, or pipe input")
-
-    stream_ai_response(connector, prompt, "Explanation")
-
-
-@cli.command()
-@click.argument("file", required=False, type=click.Path(exists=True))
-@click.option("--provider", "-p", default=None, help="AI provider")
-@click.option("--error", "-e", default=None, help="Error message to fix")
-@click.option("--apply", "-a", is_flag=True, help="Apply fix directly to file")
-@click.pass_context
-def fix(ctx, file: Optional[str], provider: Optional[str], error: Optional[str], apply: bool):
-    """
-    Fix code based on an error.
-
-    Analyzes errors and suggests or applies fixes.
-
-    \b
-    Examples:
-        nexus fix src/api.py --error "NameError: name 'foo' is not defined"
-        python app.py 2>&1 | nexus fix src/app.py
-        nexus fix main.go --error "undefined: fmt" --apply
-    """
-    if not provider:
-        provider = get_default_provider()
-
-    # Get error from flag or stdin
-    error_msg = error
-    if not error_msg and has_stdin_data():
-        error_msg = sys.stdin.read().strip()
-
-    if not error_msg:
-        raise click.ClickException("Provide --error message or pipe error output")
-
-    if not file:
-        raise click.ClickException("Provide the file to fix")
-
-    content, lang = read_file_content(file)
-    filename = Path(file).name
-
-    console.print(Panel(
-        f"[bold]File:[/bold] {file}\n"
-        f"[bold]Error:[/bold]\n{error_msg[:200]}{'...' if len(error_msg) > 200 else ''}",
-        title="🔧 Fix Code",
-        border_style="red"
-    ))
-
-    connector = create_connector(provider, verbose=False)
-
-    prompt = f"""Fix this {lang} code based on the error.
-
-## Error
-```
-{error_msg}
-```
-
-## Current Code ({filename})
-```{lang}
-{content}
-```
-
-## Instructions
-1. Identify the root cause of the error
-2. Provide the corrected code
-3. Explain what you changed and why
-
-Structure your response as:
-
-## Problem
-What caused the error (1-2 sentences)
-
-## Solution
-```{lang}
-[THE COMPLETE FIXED CODE - not just the changed parts]
-```
-
-## Changes Made
-- Change 1: description
-- Change 2: description"""
-
-    response = stream_ai_response(connector, prompt, "Fix")
-
-    # Extract fixed code if --apply
-    if apply:
-        import re
-        # Find the solution code block
-        code_match = re.search(r'## Solution\s*```(?:\w+)?\n(.*?)```', response, re.DOTALL)
-        if code_match:
-            fixed_code = code_match.group(1).strip()
-
-            # Backup original
-            backup_path = Path(file).with_suffix(Path(file).suffix + ".bak")
-            Path(file).rename(backup_path)
-
-            # Write fixed code
-            Path(file).write_text(fixed_code)
-            console.print(f"\n[green]✓[/green] Fix applied to: {file}")
-            console.print(f"[dim]  Backup saved to: {backup_path}[/dim]")
-        else:
-            console.print("\n[yellow]Could not extract fixed code. Apply manually.[/yellow]")
-
-
-@cli.command()
-@click.argument("file", type=click.Path(exists=True))
-@click.option("--provider", "-p", default=None, help="AI provider")
-@click.option("--goal", "-g", default=None, help="Refactoring goal")
-@click.option("--output", "-o", default=None, help="Output file (default: overwrite)")
-@click.pass_context
-def refactor(ctx, file: str, provider: Optional[str], goal: Optional[str], output: Optional[str]):
-    """
-    Refactor code with AI suggestions.
-
-    Improves code structure, readability, and maintainability.
-
-    \b
-    Examples:
-        nexus refactor src/legacy.py
-        nexus refactor utils.ts --goal "split into smaller functions"
-        nexus refactor api.go --goal "add error handling" -o api_v2.go
-    """
-    if not provider:
-        provider = get_default_provider()
-
-    content, lang = read_file_content(file)
-    filename = Path(file).name
-
-    goal_text = goal if goal else "Improve code quality, readability, and maintainability"
-
-    console.print(Panel(
-        f"[bold]File:[/bold] {file}\n"
-        f"[bold]Language:[/bold] {lang}\n"
-        f"[bold]Goal:[/bold] {goal_text}",
-        title="♻️  Refactor",
-        border_style="cyan"
-    ))
-
-    connector = create_connector(provider, verbose=False)
-
-    prompt = f"""Refactor this {lang} code.
-
-## Goal
-{goal_text}
-
-## Current Code ({filename})
-```{lang}
-{content}
-```
-
-## Instructions
-1. Apply the refactoring while preserving functionality
-2. Follow {lang} best practices and conventions
-3. Explain your changes
-
-Structure your response as:
-
-## Summary
-What refactoring was applied (1-2 sentences)
-
-## Refactored Code
-```{lang}
-[THE COMPLETE REFACTORED CODE]
-```
-
-## Changes Made
-- **Change 1**: description
-- **Change 2**: description
-- **Change 3**: description
-
-## Benefits
-- Benefit 1
-- Benefit 2"""
-
-    response = stream_ai_response(connector, prompt, "Refactored Code")
-
-    # Extract code if output specified
-    if output:
-        import re
-        code_match = re.search(r'## Refactored Code\s*```(?:\w+)?\n(.*?)```', response, re.DOTALL)
-        if code_match:
-            refactored_code = code_match.group(1).strip()
-            Path(output).write_text(refactored_code)
-            console.print(f"\n[green]✓[/green] Refactored code written to: {output}")
-
-
-# =============================================================================
-# VIBE CODE CLI - Interactive building with sparks
-# =============================================================================
-
-def generate_cli_sparks(context: str) -> List[Dict[str, str]]:
-    """Generate contextual next-step suggestions based on what was built."""
-    context_lower = context.lower() if isinstance(context, str) else ""
-
-    # After API/backend work
-    if any(word in context_lower for word in ["api", "endpoint", "flask", "fastapi", "express", "rest"]):
-        return [
-            {"icon": "🔐", "label": "Add Auth", "desc": "Add JWT authentication", "recommended": True, "reason": "Most APIs need auth before going live"},
-            {"icon": "🧪", "label": "Add Tests", "desc": "Create unit tests", "recommended": False, "reason": "Good practice, can wait until features done"},
-            {"icon": "📚", "label": "API Docs", "desc": "Generate OpenAPI docs", "recommended": False, "reason": "Helps others understand your API"},
-        ]
-
-    # After auth work
-    elif any(word in context_lower for word in ["auth", "jwt", "login", "password", "token"]):
-        return [
-            {"icon": "👥", "label": "User Roles", "desc": "Add admin/user permissions", "recommended": True, "reason": "Common next step after auth"},
-            {"icon": "🔄", "label": "OAuth", "desc": "Add Google/GitHub login", "recommended": False, "reason": "Nice to have"},
-            {"icon": "📧", "label": "Email Verify", "desc": "Verify user emails", "recommended": False, "reason": "Important for production"},
-        ]
-
-    # After frontend work
-    elif any(word in context_lower for word in ["react", "vue", "frontend", "component", "html", "ui"]):
-        return [
-            {"icon": "🎨", "label": "Styling", "desc": "Add Tailwind/CSS", "recommended": True, "reason": "UI needs to look good"},
-            {"icon": "📱", "label": "Responsive", "desc": "Mobile-friendly layout", "recommended": False, "reason": "Important but can iterate"},
-            {"icon": "⚡", "label": "Optimize", "desc": "Performance tweaks", "recommended": False, "reason": "Good for production"},
-        ]
-
-    # After database work
-    elif any(word in context_lower for word in ["database", "sqlite", "postgres", "mongo", "model"]):
-        return [
-            {"icon": "🔄", "label": "Migrations", "desc": "Schema migration setup", "recommended": True, "reason": "Essential for evolving data"},
-            {"icon": "💾", "label": "Seed Data", "desc": "Sample test data", "recommended": False, "reason": "Helpful for development"},
-            {"icon": "📊", "label": "Admin Panel", "desc": "Data management UI", "recommended": False, "reason": "Nice for debugging"},
-        ]
-
-    # Default
-    else:
-        return [
-            {"icon": "🚀", "label": "Build API", "desc": "Create a REST backend", "recommended": True, "reason": "Solid foundation"},
-            {"icon": "🎨", "label": "Build UI", "desc": "Create a frontend", "recommended": False, "reason": "Start here if visual"},
-            {"icon": "🛠️", "label": "CLI Tool", "desc": "Command-line app", "recommended": False, "reason": "Great for automation"},
-        ]
-
-
-def display_sparks(sparks: List[Dict[str, str]], chill_mode: bool) -> None:
-    """Display sparks in terminal."""
-    console.print("\n[bold cyan]✨ What's next?[/bold cyan]\n")
-
-    for i, spark in enumerate(sparks, 1):
-        rec = " [yellow]⭐ Recommended[/yellow]" if spark.get("recommended") else ""
-        console.print(f"  [bold][{i}][/bold] {spark['icon']} [cyan]{spark['label']}[/cyan]{rec}")
-
-        if chill_mode:
-            console.print(f"      {spark['desc']}")
-            console.print(f"      [dim]Why: {spark['reason']}[/dim]")
-        console.print()
-
-
-def methinks_generate_cli(interests: str, skill: str, problem: str, connector) -> str:
-    """Generate project ideas with Mr. MeThinks."""
-    prompt = f"""You are Mr. MeThinks, a friendly idea generator!
-
-Generate 3 project ideas for someone with:
-- Interests: {interests or "not specified"}
-- Skill level: {skill}
-- Problem to solve: {problem or "just exploring"}
-
-For each idea provide:
-### 🎯 [Fun Project Name]
-**What it is:** 1 sentence
-**Why it's cool:** 1 sentence
-**You'll learn:** 2-3 skills
-**Difficulty:** ⭐ or ⭐⭐ or ⭐⭐⭐
-
-Mark the best fit with "⭐ Perfect for you!" after the name.
-Be specific and concrete - buildable projects, not vague concepts."""
-
-    async def _think():
-        resp = await connector.send_message(prompt)
-        return resp.get("content", "Hmm, couldn't think of anything!")
-
-    return asyncio.run(_think())
-
-
-@cli.command()
-@click.option("--provider", "-p", default=None, help="AI provider")
-@click.option("--chill/--fast", default=True, help="Chill mode explains options")
-@click.option("--ideas", is_flag=True, help="Start with Mr. MeThinks idea generator")
-def vibe(provider: Optional[str], chill: bool, ideas: bool):
-    """
-    🎨 Vibe Code - Interactive building with AI
-
-    An interactive coding session with contextual suggestions.
-    Like Claude Code, but with sparks to guide you.
-
-    \b
-    Examples:
-        nexus vibe                    # Start vibing
-        nexus vibe --fast             # Quick mode (no explanations)
-        nexus vibe --ideas            # Start with idea generator
-    """
-    if not provider:
-        provider = get_default_provider()
-
-    connector = create_connector(provider, verbose=False)
-    files_created = []
-    mode_label = "🌙 Chill" if chill else "⚡ Fast"
-
-    console.print(Panel(
-        f"[bold green]🎨 Vibe Code[/bold green]\n"
-        f"Provider: {provider} | Mode: {mode_label}\n"
-        f"Type 'quit' to exit, 'ideas' for Mr. MeThinks, 'files' to see created files",
-        title="Let's Build",
-        border_style="cyan"
-    ))
-
-    # Start with ideas if requested
-    if ideas:
-        console.print("\n[bold cyan]🧠 Mr. MeThinks - Idea Generator[/bold cyan]\n")
-        interests = console.input("[bold]What are you into?[/bold] (games, music, productivity...): ").strip()
-        skill = console.input("[bold]Skill level?[/bold] (beginner/intermediate/advanced): ").strip() or "beginner"
-        problem = console.input("[bold]Problem to solve?[/bold] (optional): ").strip()
-
-        console.print("\n[dim]🧠 Thinking...[/dim]\n")
-        ideas_result = methinks_generate_cli(interests, skill, problem, connector)
-        console.print(Markdown(ideas_result))
-        console.print("\n[bold cyan]Pick an idea above and tell me to build it![/bold cyan]\n")
-
-    last_response = ""
-    current_sparks = []
-
-    while True:
+        # Check if apps are available
         try:
-            # Show spark options if available
-            if current_sparks:
-                display_sparks(current_sparks, chill)
-                console.print("[dim]Pick [1-3] or type your own idea[/dim]\n")
-
-            # Get input
-            user_input = console.input("[bold cyan]You:[/bold cyan] ").strip()
-
-            if not user_input:
-                continue
-
-            # Commands
-            if user_input.lower() in ("quit", "exit", "/quit", "/exit"):
-                console.print("[dim]Thanks for vibing! 🎨[/dim]")
-                break
-
-            if user_input.lower() in ("ideas", "/ideas", "methinks"):
-                console.print("\n[bold cyan]🧠 Mr. MeThinks[/bold cyan]\n")
-                interests = console.input("What are you into? ").strip()
-                skill = console.input("Skill level? ").strip() or "beginner"
-                problem = console.input("Problem to solve? (optional): ").strip()
-                console.print("\n[dim]🧠 Thinking...[/dim]\n")
-                ideas_result = methinks_generate_cli(interests, skill, problem, connector)
-                console.print(Markdown(ideas_result))
-                current_sparks = []
-                continue
-
-            if user_input.lower() in ("files", "/files"):
-                if files_created:
-                    console.print("\n[bold]📁 Files created:[/bold]")
-                    for f in files_created:
-                        console.print(f"  • {f}")
-                else:
-                    console.print("[dim]No files created yet[/dim]")
-                console.print()
-                continue
-
-            if user_input.lower() in ("help", "/help"):
-                console.print(Panel(
-                    "[bold]Commands:[/bold]\n"
-                    "  [1-3]     - Pick a suggested option\n"
-                    "  ideas     - Open Mr. MeThinks idea generator\n"
-                    "  files     - Show created files\n"
-                    "  quit      - Exit Vibe Code\n\n"
-                    "[bold]Or just type what you want to build![/bold]",
-                    title="Help",
-                    border_style="dim"
-                ))
-                continue
-
-            # Handle spark selection (1, 2, 3)
-            if user_input in ["1", "2", "3"] and current_sparks:
-                idx = int(user_input) - 1
-                if 0 <= idx < len(current_sparks):
-                    spark = current_sparks[idx]
-                    user_input = f"{spark['label']}: {spark['desc']}"
-                    console.print(f"[dim]→ {user_input}[/dim]\n")
-
-            # Check if this is a build request
-            is_build = any(word in user_input.lower() for word in [
-                "build", "create", "make", "add", "implement", "write", "generate"
-            ])
-
-            console.print()
-
-            if is_build:
-                # Use execute_task for building
-                console.print("[dim]🔨 Building...[/dim]\n")
-
-                tool_count = [0]
-
-                def on_tool_call(tc):
-                    tool_count[0] += 1
-                    name = tc.get("name", "unknown")
-                    args = tc.get("arguments", {})
-                    if "path" in args:
-                        detail = args["path"]
-                    elif "command" in args:
-                        detail = args["command"][:40]
-                    else:
-                        detail = ""
-
-                    icon = {"create_file": "📝", "execute_command": "⚡"}.get(name, "🔧")
-                    console.print(f"  {icon} [cyan]{name}[/cyan] {detail}")
-
-                connector._on_tool_call = on_tool_call
-
-                try:
-                    result = asyncio.run(connector.execute_task(user_input, show_progress=False))
-
-                    # Track files
-                    for f in result.files_created:
-                        if f not in files_created:
-                            files_created.append(f)
-
-                    console.print()
-                    if result.success:
-                        console.print("[bold green]✅ Done![/bold green]\n")
-                        if result.files_created:
-                            console.print(f"[bold]📁 Files:[/bold] {', '.join(result.files_created)}\n")
-                    else:
-                        console.print("[yellow]⚠️ Completed with issues[/yellow]\n")
-
-                    # Show summary
-                    if result.content:
-                        # Truncate long responses
-                        content = result.content[:800] + "..." if len(result.content) > 800 else result.content
-                        console.print(Markdown(content))
-
-                    last_response = result.content
-
-                except Exception as e:
-                    console.print(f"[red]Error: {e}[/red]")
-                    last_response = str(e)
-
-            else:
-                # Regular chat
-                async def _chat():
-                    response = await connector.send_message(user_input)
-                    return response.get("content", "")
-
-                response = asyncio.run(_chat())
-                console.print(Markdown(response))
-                last_response = response
-
-            # Generate new sparks based on response
-            current_sparks = generate_cli_sparks(last_response)
-
-        except KeyboardInterrupt:
-            console.print("\n[dim]Ctrl+C pressed. Type 'quit' to exit.[/dim]")
-        except EOFError:
-            console.print("\n[dim]Thanks for vibing! 🎨[/dim]")
-            break
+            import apps
+            console.print(f"\n[green]✓[/green] Apps installed (vibe, devtools)")
+        except ImportError:
+            console.print(f"\n[dim]○[/dim] Apps not installed")
+            console.print(f"  [dim]Install with: pip install nexus-connector[apps][/dim]")
 
 
-@cli.command()
-@click.option("--provider", "-p", default=None, help="AI provider")
-def tui(provider: Optional[str]):
-    """
-    🎨 Launch the Vibe Code TUI (graphical terminal interface)
+# =============================================================================
+# OPTIONAL: Load apps commands if available
+# =============================================================================
 
-    A beautiful terminal UI with clickable buttons, panels, and live updates.
-
-    \b
-    Example:
-        nexus tui
-        nexus tui --provider anthropic
-    """
-    if not provider:
-        provider = get_default_provider()
+def _register_app_commands():
+    """Try to register commands from apps package."""
+    try:
+        from apps.devtools.cli import devtools
+        cli.add_command(devtools)
+    except ImportError:
+        pass
 
     try:
-        from .tui import run_tui
-        run_tui(provider=provider)
-    except ImportError as e:
-        console.print("[red]Error:[/red] TUI requires 'textual' library")
-        console.print("Install with: [cyan]pip install textual[/cyan]")
-        console.print(f"\n[dim]Details: {e}[/dim]")
-        sys.exit(1)
+        # Add vibe command that launches the appropriate interface
+        @cli.command()
+        @click.option("--provider", "-p", default=None, help="AI provider")
+        @click.option("--tui", is_flag=True, help="Launch terminal UI")
+        @click.option("--web", is_flag=True, help="Launch web UI")
+        @click.option("--chill/--fast", default=True, help="Chill mode explains options")
+        def vibe(provider: Optional[str], tui: bool, web: bool, chill: bool):
+            """
+            🎨 Vibe Code - Interactive building with AI
+
+            Launch the Vibe Code experience:
+              --tui  Terminal UI with clickable panels
+              --web  Gradio web interface in browser
+
+            Examples:
+                nexus vibe --tui
+                nexus vibe --web
+            """
+            if not provider:
+                provider = get_default_provider()
+
+            if tui:
+                from apps.vibe.tui import run_tui
+                run_tui(provider=provider)
+            elif web:
+                from apps.vibe.web import create_ui
+                console.print("[bold green]🎨 Starting Vibe Code Web UI...[/bold green]")
+                app = create_ui()
+                app.launch(server_name="0.0.0.0", server_port=7860, share=False, inbrowser=True)
+            else:
+                # Default to CLI vibe mode
+                console.print("[yellow]Use --tui or --web to launch Vibe Code interface[/yellow]")
+                console.print("  nexus vibe --tui   # Terminal UI")
+                console.print("  nexus vibe --web   # Web browser UI")
+
+    except ImportError:
+        pass
+
+
+# Register app commands at module load
+_register_app_commands()
 
 
 def main():

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Nexus Connector UI - Vibe Code with AI
+Nexus Vibe Code Web UI - Gradio-based interface for building with AI.
 
 A friendly interface for vibe coders to build with AI.
 Features Chill Mode for guided, explained options.
 
-Run with: python ui.py
+Run with: python -m apps.vibe.web
+Or via CLI: nexus vibe --web
 Opens in your browser at http://localhost:7860
 """
 

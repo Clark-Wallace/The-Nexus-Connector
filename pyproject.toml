@@ -70,6 +70,12 @@ Repository = "https://github.com/Clark-Wallace/The-Nexus-Connector"
 Issues = "https://github.com/Clark-Wallace/The-Nexus-Connector/issues"
 
 [project.optional-dependencies]
+# Apps: Vibe Code TUI/Web and DevTools
+apps = [
+    "textual>=0.40.0",       # TUI framework
+    "gradio>=4.0.0",         # Web UI framework
+]
+# Development dependencies
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
@@ -87,9 +93,17 @@ docs = [
     "sphinx-autodoc-typehints>=1.24",
     "myst-parser>=2.0",
 ]
+# All optional dependencies
+all = [
+    "nexus-connector[apps,dev,docs]",
+]
 
 [project.scripts]
 nexus = "nexus.cli:main"
+nexus-devtools = "apps.devtools.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["nexus*", "apps*"]
 
 [tool.black]
 line-length = 100
