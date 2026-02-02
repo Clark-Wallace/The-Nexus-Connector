@@ -101,6 +101,7 @@ all = [
 [project.scripts]
 nexus = "nexus.cli:main"
 nexus-devtools = "apps.devtools.cli:main"
+methinks = "apps.methinks.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["nexus*", "apps*"]
