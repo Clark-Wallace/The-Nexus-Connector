@@ -22,7 +22,7 @@ from .core.metrics import NexusMetrics, get_metrics, get_tracer
 
 # Web components (optional import)
 try:
-    from .web import WebConnector, WebEnabledWrapper
+    from .web import WebConnector
     from .connectors.gm_connector import GMConnector, create_gm_server
     __all__ = [
         "NexusConnector",
@@ -57,7 +57,6 @@ try:
         "get_tracer",
         # Web extensions
         "WebConnector",
-        "WebEnabledWrapper",
         "GMConnector",
         "create_gm_server",
     ]
