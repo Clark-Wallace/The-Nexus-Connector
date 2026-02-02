@@ -1879,6 +1879,279 @@ What refactoring was applied (1-2 sentences)
             console.print(f"\n[green]✓[/green] Refactored code written to: {output}")
 
 
+# =============================================================================
+# VIBE CODE CLI - Interactive building with sparks
+# =============================================================================
+
+def generate_cli_sparks(context: str) -> List[Dict[str, str]]:
+    """Generate contextual next-step suggestions based on what was built."""
+    context_lower = context.lower() if isinstance(context, str) else ""
+
+    # After API/backend work
+    if any(word in context_lower for word in ["api", "endpoint", "flask", "fastapi", "express", "rest"]):
+        return [
+            {"icon": "🔐", "label": "Add Auth", "desc": "Add JWT authentication", "recommended": True, "reason": "Most APIs need auth before going live"},
+            {"icon": "🧪", "label": "Add Tests", "desc": "Create unit tests", "recommended": False, "reason": "Good practice, can wait until features done"},
+            {"icon": "📚", "label": "API Docs", "desc": "Generate OpenAPI docs", "recommended": False, "reason": "Helps others understand your API"},
+        ]
+
+    # After auth work
+    elif any(word in context_lower for word in ["auth", "jwt", "login", "password", "token"]):
+        return [
+            {"icon": "👥", "label": "User Roles", "desc": "Add admin/user permissions", "recommended": True, "reason": "Common next step after auth"},
+            {"icon": "🔄", "label": "OAuth", "desc": "Add Google/GitHub login", "recommended": False, "reason": "Nice to have"},
+            {"icon": "📧", "label": "Email Verify", "desc": "Verify user emails", "recommended": False, "reason": "Important for production"},
+        ]
+
+    # After frontend work
+    elif any(word in context_lower for word in ["react", "vue", "frontend", "component", "html", "ui"]):
+        return [
+            {"icon": "🎨", "label": "Styling", "desc": "Add Tailwind/CSS", "recommended": True, "reason": "UI needs to look good"},
+            {"icon": "📱", "label": "Responsive", "desc": "Mobile-friendly layout", "recommended": False, "reason": "Important but can iterate"},
+            {"icon": "⚡", "label": "Optimize", "desc": "Performance tweaks", "recommended": False, "reason": "Good for production"},
+        ]
+
+    # After database work
+    elif any(word in context_lower for word in ["database", "sqlite", "postgres", "mongo", "model"]):
+        return [
+            {"icon": "🔄", "label": "Migrations", "desc": "Schema migration setup", "recommended": True, "reason": "Essential for evolving data"},
+            {"icon": "💾", "label": "Seed Data", "desc": "Sample test data", "recommended": False, "reason": "Helpful for development"},
+            {"icon": "📊", "label": "Admin Panel", "desc": "Data management UI", "recommended": False, "reason": "Nice for debugging"},
+        ]
+
+    # Default
+    else:
+        return [
+            {"icon": "🚀", "label": "Build API", "desc": "Create a REST backend", "recommended": True, "reason": "Solid foundation"},
+            {"icon": "🎨", "label": "Build UI", "desc": "Create a frontend", "recommended": False, "reason": "Start here if visual"},
+            {"icon": "🛠️", "label": "CLI Tool", "desc": "Command-line app", "recommended": False, "reason": "Great for automation"},
+        ]
+
+
+def display_sparks(sparks: List[Dict[str, str]], chill_mode: bool) -> None:
+    """Display sparks in terminal."""
+    console.print("\n[bold cyan]✨ What's next?[/bold cyan]\n")
+
+    for i, spark in enumerate(sparks, 1):
+        rec = " [yellow]⭐ Recommended[/yellow]" if spark.get("recommended") else ""
+        console.print(f"  [bold][{i}][/bold] {spark['icon']} [cyan]{spark['label']}[/cyan]{rec}")
+
+        if chill_mode:
+            console.print(f"      {spark['desc']}")
+            console.print(f"      [dim]Why: {spark['reason']}[/dim]")
+        console.print()
+
+
+def methinks_generate_cli(interests: str, skill: str, problem: str, connector) -> str:
+    """Generate project ideas with Mr. MeThinks."""
+    prompt = f"""You are Mr. MeThinks, a friendly idea generator!
+
+Generate 3 project ideas for someone with:
+- Interests: {interests or "not specified"}
+- Skill level: {skill}
+- Problem to solve: {problem or "just exploring"}
+
+For each idea provide:
+### 🎯 [Fun Project Name]
+**What it is:** 1 sentence
+**Why it's cool:** 1 sentence
+**You'll learn:** 2-3 skills
+**Difficulty:** ⭐ or ⭐⭐ or ⭐⭐⭐
+
+Mark the best fit with "⭐ Perfect for you!" after the name.
+Be specific and concrete - buildable projects, not vague concepts."""
+
+    async def _think():
+        resp = await connector.send_message(prompt)
+        return resp.get("content", "Hmm, couldn't think of anything!")
+
+    return asyncio.run(_think())
+
+
+@cli.command()
+@click.option("--provider", "-p", default=None, help="AI provider")
+@click.option("--chill/--fast", default=True, help="Chill mode explains options")
+@click.option("--ideas", is_flag=True, help="Start with Mr. MeThinks idea generator")
+def vibe(provider: Optional[str], chill: bool, ideas: bool):
+    """
+    🎨 Vibe Code - Interactive building with AI
+
+    An interactive coding session with contextual suggestions.
+    Like Claude Code, but with sparks to guide you.
+
+    \b
+    Examples:
+        nexus vibe                    # Start vibing
+        nexus vibe --fast             # Quick mode (no explanations)
+        nexus vibe --ideas            # Start with idea generator
+    """
+    if not provider:
+        provider = get_default_provider()
+
+    connector = create_connector(provider, verbose=False)
+    files_created = []
+    mode_label = "🌙 Chill" if chill else "⚡ Fast"
+
+    console.print(Panel(
+        f"[bold green]🎨 Vibe Code[/bold green]\n"
+        f"Provider: {provider} | Mode: {mode_label}\n"
+        f"Type 'quit' to exit, 'ideas' for Mr. MeThinks, 'files' to see created files",
+        title="Let's Build",
+        border_style="cyan"
+    ))
+
+    # Start with ideas if requested
+    if ideas:
+        console.print("\n[bold cyan]🧠 Mr. MeThinks - Idea Generator[/bold cyan]\n")
+        interests = console.input("[bold]What are you into?[/bold] (games, music, productivity...): ").strip()
+        skill = console.input("[bold]Skill level?[/bold] (beginner/intermediate/advanced): ").strip() or "beginner"
+        problem = console.input("[bold]Problem to solve?[/bold] (optional): ").strip()
+
+        console.print("\n[dim]🧠 Thinking...[/dim]\n")
+        ideas_result = methinks_generate_cli(interests, skill, problem, connector)
+        console.print(Markdown(ideas_result))
+        console.print("\n[bold cyan]Pick an idea above and tell me to build it![/bold cyan]\n")
+
+    last_response = ""
+    current_sparks = []
+
+    while True:
+        try:
+            # Show spark options if available
+            if current_sparks:
+                display_sparks(current_sparks, chill)
+                console.print("[dim]Pick [1-3] or type your own idea[/dim]\n")
+
+            # Get input
+            user_input = console.input("[bold cyan]You:[/bold cyan] ").strip()
+
+            if not user_input:
+                continue
+
+            # Commands
+            if user_input.lower() in ("quit", "exit", "/quit", "/exit"):
+                console.print("[dim]Thanks for vibing! 🎨[/dim]")
+                break
+
+            if user_input.lower() in ("ideas", "/ideas", "methinks"):
+                console.print("\n[bold cyan]🧠 Mr. MeThinks[/bold cyan]\n")
+                interests = console.input("What are you into? ").strip()
+                skill = console.input("Skill level? ").strip() or "beginner"
+                problem = console.input("Problem to solve? (optional): ").strip()
+                console.print("\n[dim]🧠 Thinking...[/dim]\n")
+                ideas_result = methinks_generate_cli(interests, skill, problem, connector)
+                console.print(Markdown(ideas_result))
+                current_sparks = []
+                continue
+
+            if user_input.lower() in ("files", "/files"):
+                if files_created:
+                    console.print("\n[bold]📁 Files created:[/bold]")
+                    for f in files_created:
+                        console.print(f"  • {f}")
+                else:
+                    console.print("[dim]No files created yet[/dim]")
+                console.print()
+                continue
+
+            if user_input.lower() in ("help", "/help"):
+                console.print(Panel(
+                    "[bold]Commands:[/bold]\n"
+                    "  [1-3]     - Pick a suggested option\n"
+                    "  ideas     - Open Mr. MeThinks idea generator\n"
+                    "  files     - Show created files\n"
+                    "  quit      - Exit Vibe Code\n\n"
+                    "[bold]Or just type what you want to build![/bold]",
+                    title="Help",
+                    border_style="dim"
+                ))
+                continue
+
+            # Handle spark selection (1, 2, 3)
+            if user_input in ["1", "2", "3"] and current_sparks:
+                idx = int(user_input) - 1
+                if 0 <= idx < len(current_sparks):
+                    spark = current_sparks[idx]
+                    user_input = f"{spark['label']}: {spark['desc']}"
+                    console.print(f"[dim]→ {user_input}[/dim]\n")
+
+            # Check if this is a build request
+            is_build = any(word in user_input.lower() for word in [
+                "build", "create", "make", "add", "implement", "write", "generate"
+            ])
+
+            console.print()
+
+            if is_build:
+                # Use execute_task for building
+                console.print("[dim]🔨 Building...[/dim]\n")
+
+                tool_count = [0]
+
+                def on_tool_call(tc):
+                    tool_count[0] += 1
+                    name = tc.get("name", "unknown")
+                    args = tc.get("arguments", {})
+                    if "path" in args:
+                        detail = args["path"]
+                    elif "command" in args:
+                        detail = args["command"][:40]
+                    else:
+                        detail = ""
+
+                    icon = {"create_file": "📝", "execute_command": "⚡"}.get(name, "🔧")
+                    console.print(f"  {icon} [cyan]{name}[/cyan] {detail}")
+
+                connector._on_tool_call = on_tool_call
+
+                try:
+                    result = asyncio.run(connector.execute_task(user_input, show_progress=False))
+
+                    # Track files
+                    for f in result.files_created:
+                        if f not in files_created:
+                            files_created.append(f)
+
+                    console.print()
+                    if result.success:
+                        console.print("[bold green]✅ Done![/bold green]\n")
+                        if result.files_created:
+                            console.print(f"[bold]📁 Files:[/bold] {', '.join(result.files_created)}\n")
+                    else:
+                        console.print("[yellow]⚠️ Completed with issues[/yellow]\n")
+
+                    # Show summary
+                    if result.content:
+                        # Truncate long responses
+                        content = result.content[:800] + "..." if len(result.content) > 800 else result.content
+                        console.print(Markdown(content))
+
+                    last_response = result.content
+
+                except Exception as e:
+                    console.print(f"[red]Error: {e}[/red]")
+                    last_response = str(e)
+
+            else:
+                # Regular chat
+                async def _chat():
+                    response = await connector.send_message(user_input)
+                    return response.get("content", "")
+
+                response = asyncio.run(_chat())
+                console.print(Markdown(response))
+                last_response = response
+
+            # Generate new sparks based on response
+            current_sparks = generate_cli_sparks(last_response)
+
+        except KeyboardInterrupt:
+            console.print("\n[dim]Ctrl+C pressed. Type 'quit' to exit.[/dim]")
+        except EOFError:
+            console.print("\n[dim]Thanks for vibing! 🎨[/dim]")
+            break
+
+
 def main():
     """Main entry point."""
     cli()
