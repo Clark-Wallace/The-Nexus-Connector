@@ -313,10 +313,11 @@ class UnifiedAIWrapper:
         response, provider_used = await self._send_with_fallback(messages, message, **kwargs)
 
         # Add assistant response to history
-        if add_to_history and response.content:
+        # Must add if there's content OR tool_calls (tool results need preceding assistant message)
+        if add_to_history and (response.content or response.tool_calls):
             assistant_message = Message(
                 role="assistant",
-                content=response.content,
+                content=response.content or "",
                 tool_calls=response.tool_calls
             )
             self.conversation_history.append(assistant_message)

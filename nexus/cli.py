@@ -8,6 +8,13 @@ import asyncio
 import json
 import os
 import sys
+
+# Load .env file automatically
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 from pathlib import Path
 from typing import Optional, List
 
