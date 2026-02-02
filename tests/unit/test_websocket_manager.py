@@ -154,20 +154,21 @@ class TestConnectionHandler:
             "message": "Stream this response",
             "session_id": "test-session"
         }
-        
-        # Mock streaming response
-        async def mock_stream():
+
+        # Mock streaming response - create an async generator
+        async def mock_stream_generator(message):
             yield "Hello "
             yield "streaming "
             yield "world!"
-        
-        mock_unified_wrapper.stream_message.return_value = mock_stream()
-        
+
+        # Use side_effect to return a fresh async generator each call
+        mock_unified_wrapper.stream_message = Mock(side_effect=mock_stream_generator)
+
         await connection_handler.handle_message(chat_data)
-        
+
         mock_unified_wrapper.stream_message.assert_called_once_with("Stream this response")
-        # Should send multiple chunks
-        assert mock_websocket.send_json.call_count >= 3
+        # Should send stream_start + 3 chunks + stream_end = 5 messages
+        assert mock_websocket.send_json.call_count >= 5
     
     @pytest.mark.asyncio
     async def test_close_connection(self, connection_handler, mock_websocket):
@@ -422,10 +423,10 @@ class TestWebSocketIntegration:
         from nexus.web.session_store import SessionStore
         from nexus.core.unified_wrapper import UnifiedAIWrapper
         from nexus.core.base_connector import AIProvider
-        
+
         # Create real session store and mock wrapper creation
         session_store = SessionStore(timeout_hours=1)
-        
+
         with patch('nexus.web.websocket_manager.UnifiedAIWrapper') as mock_wrapper_class:
             mock_wrapper = AsyncMock()
             mock_wrapper.send_message.return_value = {
@@ -433,8 +434,10 @@ class TestWebSocketIntegration:
                 "usage": {"total_tokens": 50}
             }
             mock_wrapper_class.return_value = mock_wrapper
-            
-            manager = WebSocketManager(session_store=session_store)
+
+            # Provide a wrapper_factory that returns the mock
+            wrapper_factory = lambda: mock_wrapper
+            manager = WebSocketManager(session_store=session_store, wrapper_factory=wrapper_factory)
             
             # Create mock WebSocket
             mock_websocket = Mock(spec=WebSocket)
