@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Nexus Connector UI - A friendly web interface for building with AI.
+Nexus Connector UI - Vibe Code with AI
+
+A friendly interface for vibe coders to build with AI.
+Features Chill Mode for guided, explained options.
 
 Run with: python ui.py
 Opens in your browser at http://localhost:7860
@@ -10,9 +13,10 @@ import os
 import json
 import shutil
 import asyncio
+import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict, Any
 import threading
 
 # Try to load environment variables
@@ -28,66 +32,14 @@ import gradio as gr
 PROJECTS_DIR = Path("./projects")
 PROJECTS_DIR.mkdir(exist_ok=True)
 
-# Session store for persistent conversations (the Nexus way!)
+# Session store for persistent conversations
 from nexus.web import SessionStore
 SESSION_STORE = SessionStore(timeout_hours=24)
 
 
-def get_connector_for_build(provider: str, api_key: Optional[str] = None):
-    """Get a fresh NexusConnector for building (no session needed)."""
-    from nexus import NexusConnector
-
-    # Get API key from param or environment
-    if not api_key:
-        key_map = {
-            "anthropic": "ANTHROPIC_API_KEY",
-            "openai": "OPENAI_API_KEY",
-            "google": "GOOGLE_API_KEY",
-            "deepseek": "DEEPSEEK_API_KEY",
-            "xai": "XAI_API_KEY",
-        }
-        if provider in key_map:
-            api_key = os.getenv(key_map[provider])
-
-    return NexusConnector(
-        provider=provider,
-        api_key=api_key,
-        workspace=str(PROJECTS_DIR / "current"),
-    )
-
-
-def get_session_connector(provider: str, api_key: Optional[str] = None, session_id: str = "default"):
-    """Get a persistent connector from the session store (the Nexus way!)."""
-    from nexus import NexusConnector
-
-    # Get API key from param or environment
-    if not api_key:
-        key_map = {
-            "anthropic": "ANTHROPIC_API_KEY",
-            "openai": "OPENAI_API_KEY",
-            "google": "GOOGLE_API_KEY",
-            "deepseek": "DEEPSEEK_API_KEY",
-            "xai": "XAI_API_KEY",
-        }
-        if provider in key_map:
-            api_key = os.getenv(key_map[provider])
-
-    # Create a unique session key based on provider
-    full_session_id = f"{session_id}_{provider}"
-
-    # Get or create connector from session store
-    async def _get():
-        return await SESSION_STORE.get_or_create(
-            full_session_id,
-            lambda: NexusConnector(
-                provider=provider,
-                api_key=api_key,
-                workspace=str(PROJECTS_DIR / "current"),
-            )
-        )
-
-    return run_async(_get())
-
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
 
 def run_async(coro):
     """Run async code synchronously."""
@@ -104,332 +56,327 @@ def run_async(coro):
         return asyncio.run(coro)
 
 
+def get_api_key(provider: str) -> Optional[str]:
+    """Get API key for a provider from environment."""
+    key_map = {
+        "anthropic": "ANTHROPIC_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "google": "GOOGLE_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+        "xai": "XAI_API_KEY",
+    }
+    return os.getenv(key_map.get(provider, ""))
+
+
+def get_available_providers() -> List[str]:
+    """Get list of configured providers."""
+    providers = []
+    if os.getenv("OPENAI_API_KEY"):
+        providers.append("openai")
+    if os.getenv("ANTHROPIC_API_KEY"):
+        providers.append("anthropic")
+    if os.getenv("GOOGLE_API_KEY"):
+        providers.append("google")
+    if os.getenv("DEEPSEEK_API_KEY"):
+        providers.append("deepseek")
+    if os.getenv("XAI_API_KEY"):
+        providers.append("xai")
+    providers.append("ollama")
+    return providers if providers else ["ollama"]
+
+
+def get_connector(provider: str, session_id: str = "vibe"):
+    """Get a NexusConnector with session persistence."""
+    from nexus import NexusConnector
+
+    api_key = get_api_key(provider)
+    full_session_id = f"{session_id}_{provider}"
+
+    async def _get():
+        return await SESSION_STORE.get_or_create(
+            full_session_id,
+            lambda: NexusConnector(
+                provider=provider,
+                api_key=api_key or "",
+                workspace=str(PROJECTS_DIR / "current"),
+            )
+        )
+
+    return run_async(_get())
+
+
 # =============================================================================
-# CHAT FUNCTIONS
+# SPARK GENERATION - Contextual suggestions
 # =============================================================================
 
-def chat_response(message: str, history: List[dict], provider: str, api_key: str) -> Tuple[str, List[dict]]:
-    """Handle chat messages using Nexus session persistence."""
+def generate_sparks(context: str, chill_mode: bool) -> List[Dict[str, str]]:
+    """Generate contextual next-step suggestions based on what was built."""
+
+    # Detect what was built from context
+    context_lower = context.lower()
+
+    sparks = []
+
+    # After API/backend work
+    if any(word in context_lower for word in ["api", "endpoint", "flask", "fastapi", "express", "rest"]):
+        sparks = [
+            {"icon": "🔐", "label": "Add Auth", "desc": "Add JWT authentication so users can securely access their data", "recommended": True, "reason": "Most APIs need auth before going live"},
+            {"icon": "🧪", "label": "Add Tests", "desc": "Create unit tests to catch bugs before they happen", "recommended": False, "reason": "Good practice, but can wait until features are done"},
+            {"icon": "📚", "label": "API Docs", "desc": "Generate OpenAPI/Swagger documentation", "recommended": False, "reason": "Helps others understand your API"},
+        ]
+
+    # After auth work
+    elif any(word in context_lower for word in ["auth", "jwt", "login", "password", "token"]):
+        sparks = [
+            {"icon": "👥", "label": "User Roles", "desc": "Add admin/user roles for different permissions", "recommended": True, "reason": "Common next step after basic auth"},
+            {"icon": "🔄", "label": "OAuth", "desc": "Add Google/GitHub login for easier sign-up", "recommended": False, "reason": "Nice to have, not essential"},
+            {"icon": "📧", "label": "Email Verify", "desc": "Send verification emails to confirm accounts", "recommended": False, "reason": "Important for production but adds complexity"},
+        ]
+
+    # After frontend work
+    elif any(word in context_lower for word in ["react", "vue", "frontend", "component", "html", "css"]):
+        sparks = [
+            {"icon": "🎨", "label": "Add Styling", "desc": "Make it look good with Tailwind or styled-components", "recommended": True, "reason": "UI needs to look good to feel good"},
+            {"icon": "📱", "label": "Mobile Ready", "desc": "Make it responsive for phones and tablets", "recommended": False, "reason": "Important but can iterate on"},
+            {"icon": "⚡", "label": "Optimize", "desc": "Add lazy loading and performance optimizations", "recommended": False, "reason": "Good for production, not urgent"},
+        ]
+
+    # After database work
+    elif any(word in context_lower for word in ["database", "sqlite", "postgres", "mongo", "model"]):
+        sparks = [
+            {"icon": "🔄", "label": "Migrations", "desc": "Set up database migrations for schema changes", "recommended": True, "reason": "Essential for evolving your data model"},
+            {"icon": "💾", "label": "Seed Data", "desc": "Create sample data for testing", "recommended": False, "reason": "Helpful for development"},
+            {"icon": "📊", "label": "Admin Panel", "desc": "Build a simple admin interface to manage data", "recommended": False, "reason": "Nice for debugging and management"},
+        ]
+
+    # After tests
+    elif any(word in context_lower for word in ["test", "pytest", "jest", "spec"]):
+        sparks = [
+            {"icon": "🔄", "label": "CI/CD", "desc": "Set up GitHub Actions to run tests automatically", "recommended": True, "reason": "Automates quality checks on every push"},
+            {"icon": "📊", "label": "Coverage", "desc": "Add test coverage reporting", "recommended": False, "reason": "Shows how much code is tested"},
+            {"icon": "🧪", "label": "E2E Tests", "desc": "Add end-to-end tests with Playwright or Cypress", "recommended": False, "reason": "Tests the full user flow"},
+        ]
+
+    # Generic/starting out
+    else:
+        sparks = [
+            {"icon": "🚀", "label": "Build API", "desc": "Create a REST API backend", "recommended": True, "reason": "A solid backend is the foundation"},
+            {"icon": "🎨", "label": "Build UI", "desc": "Create a frontend interface", "recommended": False, "reason": "Start here if you're visual"},
+            {"icon": "🛠️", "label": "CLI Tool", "desc": "Build a command-line tool", "recommended": False, "reason": "Great for automation tasks"},
+        ]
+
+    return sparks
+
+
+def format_sparks_chill(sparks: List[Dict[str, str]]) -> str:
+    """Format sparks for chill mode - with explanations."""
+    output = "\n\n---\n\n### ✨ What's next? Here are your options:\n\n"
+
+    for i, spark in enumerate(sparks, 1):
+        recommended = " ⭐ **Recommended**" if spark.get("recommended") else ""
+        output += f"""**{i}. {spark['icon']} {spark['label']}**{recommended}
+
+{spark['desc']}
+
+*Why: {spark['reason']}*
+
+"""
+
+    output += "\n**Type a number (1-3) or tell me what you're thinking...**"
+    return output
+
+
+def format_sparks_fast(sparks: List[Dict[str, str]]) -> str:
+    """Format sparks for fast mode - just buttons."""
+    # This returns a hint that buttons should be shown
+    return "SHOW_SPARK_BUTTONS"
+
+
+# =============================================================================
+# VIBE CODE - Main interactive coding mode
+# =============================================================================
+
+def vibe_code_respond(
+    message: str,
+    history: List[dict],
+    provider: str,
+    chill_mode: bool,
+    files_created: List[str],
+) -> Tuple[str, List[dict], List[str], str, str]:
+    """
+    Main Vibe Code response handler.
+    Returns: (clear_input, history, files_created, files_display, sparks_display)
+    """
     if not message or not message.strip():
-        return "", history
+        return "", history, files_created, format_files(files_created), ""
 
-    # Add user message to history for display
+    # Handle spark button clicks (1, 2, 3)
+    if message.strip() in ["1", "2", "3"]:
+        # Get the last AI message to regenerate sparks
+        last_ai = ""
+        for msg in reversed(history):
+            if msg.get("role") == "assistant":
+                last_ai = msg.get("content", "")
+                break
+
+        sparks = generate_sparks(last_ai, chill_mode)
+        idx = int(message.strip()) - 1
+        if 0 <= idx < len(sparks):
+            spark = sparks[idx]
+            message = f"{spark['label']}: {spark['desc']}"
+
+    # Add user message to history
     history = history + [{"role": "user", "content": message}]
 
     try:
-        # Get persistent connector from session store
-        # This maintains conversation history automatically!
-        connector = get_session_connector(
-            provider,
-            api_key if api_key and api_key.strip() else None,
-            session_id="ui_chat"
-        )
+        connector = get_connector(provider, session_id="vibe_code")
 
-        async def _chat():
-            response = await connector.send_message(message)
-            return response.get("content", "No response")
+        # Track tool calls for display
+        tool_log = []
+        new_files = list(files_created)
 
-        response = run_async(_chat())
+        # Check if this looks like a build request
+        is_build = any(word in message.lower() for word in [
+            "build", "create", "make", "generate", "write", "add", "implement"
+        ])
+
+        if is_build:
+            # Use execute_task for building
+            async def _build():
+                result = await connector.execute_task(message, show_progress=False)
+                return result
+
+            result = run_async(_build())
+
+            # Track files
+            for f in result.files_created:
+                if f not in new_files:
+                    new_files.append(f)
+            for f in result.files_modified:
+                if f not in new_files:
+                    new_files.append(f)
+
+            # Format response
+            if result.success:
+                response = f"✅ **Done!**\n\n{result.content[:1000]}"
+                if result.files_created:
+                    response += f"\n\n📁 **Files created:** {', '.join(result.files_created)}"
+            else:
+                response = f"⚠️ **Completed with issues:**\n\n{result.content}"
+
+        else:
+            # Regular chat for questions
+            async def _chat():
+                resp = await connector.send_message(message)
+                return resp.get("content", "I couldn't generate a response.")
+
+            response = run_async(_chat())
+
+        # Add AI response to history
         history = history + [{"role": "assistant", "content": response}]
-        return "", history
+
+        # Generate sparks based on response
+        sparks = generate_sparks(response, chill_mode)
+        if chill_mode:
+            sparks_display = format_sparks_chill(sparks)
+        else:
+            sparks_display = format_sparks_fast(sparks)
+
+        return "", history, new_files, format_files(new_files), sparks_display
 
     except Exception as e:
-        error_msg = f"❌ Error: {str(e)}"
+        error_msg = f"❌ **Error:** {str(e)}"
         history = history + [{"role": "assistant", "content": error_msg}]
-        return "", history
+        return "", history, files_created, format_files(files_created), ""
+
+
+def format_files(files: List[str]) -> str:
+    """Format file list for display."""
+    if not files:
+        return "*No files created yet*"
+
+    output = "### 📁 Files Created\n\n"
+    for f in files[-10:]:  # Show last 10
+        # Get icon by extension
+        ext = Path(f).suffix.lower()
+        icon = {
+            ".py": "🐍", ".js": "📜", ".ts": "📘", ".html": "🌐",
+            ".css": "🎨", ".json": "📋", ".md": "📝", ".yaml": "⚙️",
+            ".yml": "⚙️", ".sql": "🗃️", ".sh": "⚡", ".go": "🔷",
+            ".rs": "🦀", ".rb": "💎", ".java": "☕",
+        }.get(ext, "📄")
+        output += f"- {icon} `{f}`\n"
+
+    if len(files) > 10:
+        output += f"\n*...and {len(files) - 10} more*"
+
+    return output
+
+
+def new_vibe_session():
+    """Start a new Vibe Code session."""
+    # Clear the session
+    run_async(SESSION_STORE.clear())
+    return [], [], "*No files created yet*", ""
 
 
 # =============================================================================
-# BUILD FUNCTIONS
+# QUICK ACTIONS - Simple one-click tools
 # =============================================================================
 
-def build_project(
-    description: str,
-    project_name: str,
-    provider: str,
-    api_key: str,
-    progress=gr.Progress()
-) -> Tuple[str, str, str]:
-    """Build a project from description."""
-    if not description.strip():
-        return "Please describe what you want to build.", "", ""
+def quick_fix(error_text: str, code_text: str, provider: str) -> str:
+    """Quick fix for code errors."""
+    if not error_text.strip():
+        return "Please paste the error message."
 
-    # Create project directory
-    if not project_name.strip():
-        project_name = f"project_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    connector = get_connector(provider, session_id="quick_fix")
 
-    project_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in project_name)
-    project_path = PROJECTS_DIR / project_name
+    prompt = f"""Fix this error:
 
-    # Clean up if exists
-    if project_path.exists():
-        shutil.rmtree(project_path)
-    project_path.mkdir(parents=True)
+Error:
+```
+{error_text}
+```
 
-    try:
-        progress(0.1, desc="Starting build...")
+{"Code:" if code_text.strip() else ""}
+{"```" if code_text.strip() else ""}
+{code_text if code_text.strip() else ""}
+{"```" if code_text.strip() else ""}
 
-        connector = get_connector_for_build(provider, api_key if api_key and api_key.strip() else None)
-        connector.workspace = str(project_path)
+Provide:
+1. What's wrong (1 sentence)
+2. The fixed code
+3. What you changed"""
 
-        async def _build():
-            result = await connector.execute_task(description, show_progress=False)
-            return result
+    async def _fix():
+        resp = await connector.send_message(prompt)
+        return resp.get("content", "Couldn't generate a fix.")
 
-        progress(0.3, desc="AI is working...")
-        result = run_async(_build())
-        progress(0.9, desc="Finishing up...")
+    return run_async(_fix())
 
-        # Save project metadata
-        metadata = {
-            "name": project_name,
-            "description": description,
-            "created": datetime.now().isoformat(),
-            "provider": provider,
-            "success": result.success,
-            "files_created": result.files_created,
-            "files_modified": result.files_modified,
-            "iterations": result.iterations,
-            "tokens_used": result.tokens_used,
-        }
 
-        with open(project_path / ".nexus_project.json", "w") as f:
-            json.dump(metadata, f, indent=2)
+def quick_explain(code_or_error: str, provider: str) -> str:
+    """Quick explanation of code or error."""
+    if not code_or_error.strip():
+        return "Please paste code or an error to explain."
 
-        # Build file tree
-        file_tree = get_file_tree(project_path)
+    connector = get_connector(provider, session_id="quick_explain")
 
-        # Get status message
-        if result.success:
-            status = f"""✅ **Project Built Successfully!**
+    prompt = f"""Explain this in simple terms:
 
-**Project:** {project_name}
-**Location:** `{project_path}`
+```
+{code_or_error}
+```
 
-**Files Created:** {len(result.files_created)}
-**Iterations:** {result.iterations}
-**Tokens Used:** {result.tokens_used}
+If it's an error, explain what went wrong and how to fix it.
+If it's code, explain what it does step by step.
+Keep it beginner-friendly."""
 
-{result.content[:500] + '...' if len(result.content) > 500 else result.content}
-"""
-        else:
-            status = f"""⚠️ **Build completed with issues**
+    async def _explain():
+        resp = await connector.send_message(prompt)
+        return resp.get("content", "Couldn't generate explanation.")
 
-{result.content}
-"""
-
-        progress(1.0, desc="Done!")
-        return status, file_tree, project_name
-
-    except Exception as e:
-        return f"❌ **Error:** {str(e)}", "", ""
-
-
-def get_file_tree(path: Path, prefix: str = "") -> str:
-    """Generate a file tree string."""
-    if not path.exists():
-        return ""
-
-    items = sorted(path.iterdir(), key=lambda x: (x.is_file(), x.name))
-    tree = []
-
-    for i, item in enumerate(items):
-        if item.name.startswith(".") and item.name != ".nexus_project.json":
-            continue
-
-        is_last = i == len(items) - 1
-        current_prefix = "└── " if is_last else "├── "
-
-        if item.is_dir():
-            tree.append(f"{prefix}{current_prefix}📁 {item.name}/")
-            next_prefix = prefix + ("    " if is_last else "│   ")
-            tree.append(get_file_tree(item, next_prefix))
-        else:
-            # Get file icon based on extension
-            ext = item.suffix.lower()
-            icon = {
-                ".py": "🐍",
-                ".js": "📜",
-                ".ts": "📘",
-                ".html": "🌐",
-                ".css": "🎨",
-                ".json": "📋",
-                ".md": "📝",
-                ".txt": "📄",
-                ".yaml": "⚙️",
-                ".yml": "⚙️",
-                ".sql": "🗃️",
-                ".sh": "💻",
-            }.get(ext, "📄")
-            tree.append(f"{prefix}{current_prefix}{icon} {item.name}")
-
-    return "\n".join(tree)
-
-
-def view_file(project_name: str, file_path: str) -> str:
-    """View a file's contents."""
-    if not project_name or not file_path:
-        return "Select a project and file to view."
-
-    full_path = PROJECTS_DIR / project_name / file_path.strip()
-
-    if not full_path.exists():
-        return f"File not found: {file_path}"
-
-    if full_path.is_dir():
-        return f"This is a directory: {file_path}"
-
-    try:
-        content = full_path.read_text()
-        ext = full_path.suffix.lower()
-        lang = {
-            ".py": "python",
-            ".js": "javascript",
-            ".ts": "typescript",
-            ".html": "html",
-            ".css": "css",
-            ".json": "json",
-            ".md": "markdown",
-            ".yaml": "yaml",
-            ".yml": "yaml",
-            ".sql": "sql",
-            ".sh": "bash",
-        }.get(ext, "")
-
-        return f"```{lang}\n{content}\n```"
-    except Exception as e:
-        return f"Error reading file: {e}"
-
-
-# =============================================================================
-# PROJECT MANAGEMENT
-# =============================================================================
-
-def list_projects() -> List[List[str]]:
-    """List all saved projects."""
-    projects = []
-
-    for project_dir in sorted(PROJECTS_DIR.iterdir(), reverse=True):
-        if not project_dir.is_dir():
-            continue
-
-        metadata_file = project_dir / ".nexus_project.json"
-        if metadata_file.exists():
-            try:
-                with open(metadata_file) as f:
-                    meta = json.load(f)
-
-                projects.append([
-                    meta.get("name", project_dir.name),
-                    meta.get("description", "")[:50] + "..." if len(meta.get("description", "")) > 50 else meta.get("description", ""),
-                    meta.get("created", "")[:10],
-                    "✅" if meta.get("success") else "⚠️",
-                    str(len(meta.get("files_created", []))),
-                ])
-            except:
-                projects.append([
-                    project_dir.name,
-                    "(No metadata)",
-                    "",
-                    "?",
-                    "?",
-                ])
-        else:
-            # Count files
-            file_count = sum(1 for _ in project_dir.rglob("*") if _.is_file())
-            projects.append([
-                project_dir.name,
-                "(Imported project)",
-                "",
-                "📁",
-                str(file_count),
-            ])
-
-    return projects
-
-
-def load_project(project_name: str) -> Tuple[str, str, str]:
-    """Load a project's details."""
-    if not project_name:
-        return "", "", ""
-
-    project_path = PROJECTS_DIR / project_name
-
-    if not project_path.exists():
-        return "Project not found", "", ""
-
-    # Load metadata
-    metadata_file = project_path / ".nexus_project.json"
-    if metadata_file.exists():
-        with open(metadata_file) as f:
-            meta = json.load(f)
-
-        info = f"""## {meta.get('name', project_name)}
-
-**Description:** {meta.get('description', 'N/A')}
-
-**Created:** {meta.get('created', 'Unknown')}
-**Provider:** {meta.get('provider', 'Unknown')}
-**Status:** {'✅ Success' if meta.get('success') else '⚠️ Issues'}
-**Files:** {len(meta.get('files_created', []))} created, {len(meta.get('files_modified', []))} modified
-**Tokens:** {meta.get('tokens_used', 'N/A')}
-"""
-    else:
-        info = f"## {project_name}\n\n(No metadata available)"
-
-    # Get file tree
-    file_tree = get_file_tree(project_path)
-
-    return info, file_tree, project_name
-
-
-def delete_project(project_name: str) -> Tuple[str, List[List[str]]]:
-    """Delete a project."""
-    if not project_name:
-        return "No project selected", list_projects()
-
-    project_path = PROJECTS_DIR / project_name
-
-    if project_path.exists():
-        shutil.rmtree(project_path)
-        return f"✅ Deleted: {project_name}", list_projects()
-
-    return f"Project not found: {project_name}", list_projects()
-
-
-def download_project(project_name: str) -> Optional[str]:
-    """Create a zip file of the project for download."""
-    if not project_name:
-        return None
-
-    project_path = PROJECTS_DIR / project_name
-
-    if not project_path.exists():
-        return None
-
-    # Create zip
-    zip_path = PROJECTS_DIR / f"{project_name}.zip"
-    shutil.make_archive(str(zip_path.with_suffix("")), "zip", project_path)
-
-    return str(zip_path)
-
-
-def get_project_files(project_name: str) -> List[str]:
-    """Get list of files in a project for dropdown."""
-    if not project_name:
-        return []
-
-    project_path = PROJECTS_DIR / project_name
-    if not project_path.exists():
-        return []
-
-    files = []
-    for f in project_path.rglob("*"):
-        if f.is_file() and not f.name.startswith("."):
-            rel_path = f.relative_to(project_path)
-            files.append(str(rel_path))
-
-    return sorted(files)
+    return run_async(_explain())
 
 
 # =============================================================================
@@ -439,273 +386,245 @@ def get_project_files(project_name: str) -> List[str]:
 def create_ui():
     """Create the Gradio interface."""
 
-    # Check for available providers
-    available_providers = []
-    if os.getenv("ANTHROPIC_API_KEY"):
-        available_providers.append("anthropic")
-    if os.getenv("OPENAI_API_KEY"):
-        available_providers.append("openai")
-    if os.getenv("GOOGLE_API_KEY"):
-        available_providers.append("google")
-    if os.getenv("DEEPSEEK_API_KEY"):
-        available_providers.append("deepseek")
-    if os.getenv("XAI_API_KEY"):
-        available_providers.append("xai")
-    available_providers.append("ollama")  # Always available if installed
+    providers = get_available_providers()
+    default_provider = providers[0]
 
-    default_provider = available_providers[0] if available_providers else "ollama"
+    with gr.Blocks(title="Nexus - Vibe Code") as app:
 
-    with gr.Blocks(title="Nexus Connector") as app:
-
+        # Header
         gr.Markdown("""
-        # 🚀 Nexus Connector
+# 🎨 Nexus Vibe Code
 
-        **Build apps with AI. No coding required.**
-
-        Describe what you want, and Nexus will build it for you.
+**Build with AI, your way.** Describe what you want, get suggestions, iterate together.
         """)
 
         with gr.Tabs():
+
             # =================================================================
-            # BUILD TAB
+            # VIBE CODE TAB - Main experience
             # =================================================================
-            with gr.TabItem("🔨 Build", id="build"):
+            with gr.TabItem("🎨 Vibe Code", id="vibe"):
+
                 with gr.Row():
-                    with gr.Column(scale=2):
-                        build_description = gr.Textbox(
-                            label="What do you want to build?",
-                            placeholder="Example: Create a Flask REST API with user authentication, SQLite database, and unit tests",
-                            lines=4,
+                    # Main chat area
+                    with gr.Column(scale=3):
+
+                        vibe_chat = gr.Chatbot(
+                            label="Vibe Code",
+                            height=450,
+                            placeholder="Tell me what you want to build...",
+                        )
+
+                        # Sparks display area
+                        sparks_display = gr.Markdown(
+                            value="",
+                            elem_classes=["sparks-area"],
                         )
 
                         with gr.Row():
-                            build_name = gr.Textbox(
-                                label="Project Name (optional)",
-                                placeholder="my-awesome-project",
-                                scale=2,
+                            vibe_input = gr.Textbox(
+                                label="Your message",
+                                placeholder="Build me a...",
+                                scale=4,
+                                show_label=False,
                             )
-                            build_provider = gr.Dropdown(
-                                choices=["anthropic", "openai", "google", "deepseek", "xai", "ollama"],
-                                value=default_provider,
-                                label="AI Provider",
-                                scale=1,
-                            )
+                            vibe_send = gr.Button("Send", variant="primary", scale=1)
 
-                        build_btn = gr.Button("🚀 Build It!", variant="primary", size="lg")
+                        # Quick spark buttons (for fast mode)
+                        with gr.Row(visible=True) as spark_buttons:
+                            spark_1 = gr.Button("1️⃣", size="sm", scale=1)
+                            spark_2 = gr.Button("2️⃣", size="sm", scale=1)
+                            spark_3 = gr.Button("3️⃣", size="sm", scale=1)
+                            gr.Button("", scale=3, visible=False)  # spacer
 
-                        build_status = gr.Markdown(label="Status")
-
+                    # Sidebar
                     with gr.Column(scale=1):
-                        gr.Markdown("### 📁 Project Files")
-                        build_files = gr.Markdown(
-                            elem_classes=["file-tree"],
-                            value="*Your project files will appear here*"
+
+                        gr.Markdown("### ⚙️ Settings")
+
+                        vibe_provider = gr.Dropdown(
+                            choices=providers,
+                            value=default_provider,
+                            label="AI Provider",
                         )
 
-                # Quick templates
-                gr.Markdown("### ⚡ Quick Templates")
-                with gr.Row():
-                    gr.Button("Flask API").click(
-                        lambda: "Create a Flask REST API with CRUD endpoints for a todo list, including SQLite database and error handling",
-                        outputs=build_description
-                    )
-                    gr.Button("CLI Tool").click(
-                        lambda: "Create a Python CLI tool that converts CSV files to JSON, with argument parsing and help text",
-                        outputs=build_description
-                    )
-                    gr.Button("Web Scraper").click(
-                        lambda: "Create a Python web scraper that extracts article titles and links from a news website, saves to JSON",
-                        outputs=build_description
-                    )
-                    gr.Button("Discord Bot").click(
-                        lambda: "Create a Discord bot with commands: !hello, !roll (dice), !quote (random quote), using discord.py",
-                        outputs=build_description
-                    )
-
-            # =================================================================
-            # CHAT TAB
-            # =================================================================
-            with gr.TabItem("💬 Chat", id="chat"):
-                chatbot = gr.Chatbot(
-                    label="Chat with AI",
-                    height=400,
-                )
-
-                with gr.Row():
-                    chat_input = gr.Textbox(
-                        label="Message",
-                        placeholder="Ask anything...",
-                        scale=4,
-                        show_label=False,
-                    )
-                    chat_provider = gr.Dropdown(
-                        choices=["anthropic", "openai", "google", "deepseek", "xai", "ollama"],
-                        value=default_provider,
-                        label="Provider",
-                        scale=1,
-                    )
-
-                with gr.Row():
-                    chat_btn = gr.Button("Send", variant="primary")
-                    clear_btn = gr.Button("Clear")
-
-            # =================================================================
-            # PROJECTS TAB
-            # =================================================================
-            with gr.TabItem("📂 Projects", id="projects"):
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        gr.Markdown("### Saved Projects")
-                        refresh_btn = gr.Button("🔄 Refresh")
-
-                        projects_table = gr.Dataframe(
-                            headers=["Name", "Description", "Created", "Status", "Files"],
-                            datatype=["str", "str", "str", "str", "str"],
-                            value=list_projects(),
-                            interactive=False,
-                            wrap=True,
+                        chill_mode = gr.Checkbox(
+                            label="🌙 Chill Mode",
+                            value=True,
+                            info="Explains options instead of just buttons"
                         )
 
-                        with gr.Row():
-                            delete_btn = gr.Button("🗑️ Delete", variant="stop")
-                            download_btn = gr.Button("📥 Download")
+                        new_session_btn = gr.Button("🆕 New Session", variant="secondary")
 
-                    with gr.Column(scale=1):
-                        project_info = gr.Markdown("*Select a project to view details*")
-                        project_tree = gr.Markdown(elem_classes=["file-tree"])
+                        gr.Markdown("---")
 
-                        with gr.Row():
-                            file_dropdown = gr.Dropdown(
-                                label="View File",
-                                choices=[],
-                                interactive=True,
-                            )
+                        # Files sidebar
+                        files_display = gr.Markdown(
+                            value="*No files created yet*",
+                            label="Files",
+                        )
 
-                        file_content = gr.Markdown()
+                        download_btn = gr.Button("📥 Download All", size="sm")
 
-                # Hidden state for selected project
-                selected_project = gr.State("")
-                download_file = gr.File(label="Download", visible=False)
+                # Hidden state
+                files_state = gr.State([])
+
+            # =================================================================
+            # QUICK TOOLS TAB
+            # =================================================================
+            with gr.TabItem("🔧 Quick Tools", id="tools"):
+
+                gr.Markdown("""
+### Quick Tools
+
+One-click tools for common tasks. No conversation needed.
+                """)
+
+                with gr.Tabs():
+
+                    # Fix tab
+                    with gr.TabItem("🔧 Fix Code"):
+                        gr.Markdown("**Paste an error, get a fix.**")
+
+                        fix_error = gr.Textbox(
+                            label="Error message",
+                            placeholder="TypeError: Cannot read property 'map' of undefined",
+                            lines=3,
+                        )
+                        fix_code = gr.Textbox(
+                            label="Your code (optional)",
+                            placeholder="Paste the problematic code here...",
+                            lines=6,
+                        )
+                        fix_provider = gr.Dropdown(
+                            choices=providers,
+                            value=default_provider,
+                            label="Provider",
+                        )
+                        fix_btn = gr.Button("🔧 Fix It", variant="primary")
+                        fix_result = gr.Markdown()
+
+                    # Explain tab
+                    with gr.TabItem("❓ Explain"):
+                        gr.Markdown("**Paste anything, get an explanation.**")
+
+                        explain_input = gr.Textbox(
+                            label="Code or error to explain",
+                            placeholder="Paste code, an error, or anything you want explained...",
+                            lines=8,
+                        )
+                        explain_provider = gr.Dropdown(
+                            choices=providers,
+                            value=default_provider,
+                            label="Provider",
+                        )
+                        explain_btn = gr.Button("❓ Explain", variant="primary")
+                        explain_result = gr.Markdown()
 
             # =================================================================
             # SETTINGS TAB
             # =================================================================
             with gr.TabItem("⚙️ Settings", id="settings"):
-                gr.Markdown("""
-                ### API Keys
 
-                Add your API keys here, or set them in your `.env` file.
+                gr.Markdown("### Provider Status")
 
-                Keys entered here are only stored in your browser session.
-                """)
-
-                api_key_input = gr.Textbox(
-                    label="API Key (optional override)",
-                    placeholder="sk-... or sk-ant-...",
-                    type="password",
-                )
-
-                gr.Markdown("""
-                ### Provider Status
-                """)
-
-                status_text = []
+                status_lines = []
                 for provider, env_var in [
-                    ("Anthropic", "ANTHROPIC_API_KEY"),
                     ("OpenAI", "OPENAI_API_KEY"),
+                    ("Anthropic", "ANTHROPIC_API_KEY"),
                     ("Google", "GOOGLE_API_KEY"),
                     ("DeepSeek", "DEEPSEEK_API_KEY"),
                     ("xAI", "XAI_API_KEY"),
                 ]:
                     if os.getenv(env_var):
-                        status_text.append(f"- ✅ **{provider}**: Configured")
+                        status_lines.append(f"- ✅ **{provider}**: Ready")
                     else:
-                        status_text.append(f"- ❌ **{provider}**: Not configured")
+                        status_lines.append(f"- ❌ **{provider}**: Not configured")
 
-                status_text.append(f"- 🏠 **Ollama**: {'Available' if shutil.which('ollama') else 'Not installed'}")
+                status_lines.append(f"- 🏠 **Ollama**: {'Available' if shutil.which('ollama') else 'Not installed'}")
 
-                gr.Markdown("\n".join(status_text))
+                gr.Markdown("\n".join(status_lines))
 
                 gr.Markdown("""
-                ### Quick Setup
+---
 
-                ```bash
-                # Copy the example and add your keys
-                cp .env.example .env
-                nano .env  # Add your API keys
-                ```
+### Setup
 
-                Get API keys:
-                - [Anthropic Console](https://console.anthropic.com/)
-                - [OpenAI Platform](https://platform.openai.com/api-keys)
-                - [Google AI Studio](https://makersuite.google.com/app/apikey)
-                - [DeepSeek Platform](https://platform.deepseek.com/)
-                - [Ollama](https://ollama.ai/) (free, runs locally)
+1. Copy `.env.example` to `.env`
+2. Add your API keys
+3. Restart the UI
+
+```bash
+cp .env.example .env
+nano .env  # Add your keys
+python ui.py
+```
+
+**Get API keys:**
+- [OpenAI](https://platform.openai.com/api-keys)
+- [Anthropic](https://console.anthropic.com/)
+- [Google](https://makersuite.google.com/app/apikey)
+- [DeepSeek](https://platform.deepseek.com/)
+- [Ollama](https://ollama.ai/) (free, local)
                 """)
 
         # =====================================================================
         # EVENT HANDLERS
         # =====================================================================
 
-        # Build tab
-        build_btn.click(
-            build_project,
-            inputs=[build_description, build_name, build_provider, api_key_input],
-            outputs=[build_status, build_files, selected_project],
+        # Vibe Code handlers
+        def handle_vibe_send(message, history, provider, chill, files):
+            return vibe_code_respond(message, history, provider, chill, files)
+
+        vibe_send.click(
+            handle_vibe_send,
+            inputs=[vibe_input, vibe_chat, vibe_provider, chill_mode, files_state],
+            outputs=[vibe_input, vibe_chat, files_state, files_display, sparks_display],
         )
 
-        # Chat tab
-        chat_btn.click(
-            chat_response,
-            inputs=[chat_input, chatbot, chat_provider, api_key_input],
-            outputs=[chat_input, chatbot],
-        )
-        chat_input.submit(
-            chat_response,
-            inputs=[chat_input, chatbot, chat_provider, api_key_input],
-            outputs=[chat_input, chatbot],
-        )
-        def clear_chat():
-            """Clear chat history and session."""
-            # Clear all chat sessions
-            run_async(SESSION_STORE.clear())
-            return []
-
-        clear_btn.click(clear_chat, outputs=[chatbot])
-
-        # Projects tab
-        refresh_btn.click(list_projects, outputs=[projects_table])
-
-        def on_project_select(evt: gr.SelectData, projects_data):
-            if evt.index[0] < len(projects_data):
-                project_name = projects_data[evt.index[0]][0]
-                info, tree, name = load_project(project_name)
-                files = get_project_files(project_name)
-                return info, tree, name, gr.Dropdown(choices=files)
-            return "", "", "", gr.Dropdown(choices=[])
-
-        projects_table.select(
-            on_project_select,
-            inputs=[projects_table],
-            outputs=[project_info, project_tree, selected_project, file_dropdown],
+        vibe_input.submit(
+            handle_vibe_send,
+            inputs=[vibe_input, vibe_chat, vibe_provider, chill_mode, files_state],
+            outputs=[vibe_input, vibe_chat, files_state, files_display, sparks_display],
         )
 
-        file_dropdown.change(
-            view_file,
-            inputs=[selected_project, file_dropdown],
-            outputs=[file_content],
+        # Spark button handlers
+        def send_spark(num, history, provider, chill, files):
+            return vibe_code_respond(str(num), history, provider, chill, files)
+
+        spark_1.click(
+            lambda h, p, c, f: send_spark(1, h, p, c, f),
+            inputs=[vibe_chat, vibe_provider, chill_mode, files_state],
+            outputs=[vibe_input, vibe_chat, files_state, files_display, sparks_display],
+        )
+        spark_2.click(
+            lambda h, p, c, f: send_spark(2, h, p, c, f),
+            inputs=[vibe_chat, vibe_provider, chill_mode, files_state],
+            outputs=[vibe_input, vibe_chat, files_state, files_display, sparks_display],
+        )
+        spark_3.click(
+            lambda h, p, c, f: send_spark(3, h, p, c, f),
+            inputs=[vibe_chat, vibe_provider, chill_mode, files_state],
+            outputs=[vibe_input, vibe_chat, files_state, files_display, sparks_display],
         )
 
-        delete_btn.click(
-            delete_project,
-            inputs=[selected_project],
-            outputs=[project_info, projects_table],
+        # New session
+        new_session_btn.click(
+            new_vibe_session,
+            outputs=[vibe_chat, files_state, files_display, sparks_display],
         )
 
-        download_btn.click(
-            download_project,
-            inputs=[selected_project],
-            outputs=[download_file],
+        # Quick tools handlers
+        fix_btn.click(
+            quick_fix,
+            inputs=[fix_error, fix_code, fix_provider],
+            outputs=[fix_result],
+        )
+
+        explain_btn.click(
+            quick_explain,
+            inputs=[explain_input, explain_provider],
+            outputs=[explain_result],
         )
 
     return app
@@ -716,14 +635,14 @@ def create_ui():
 # =============================================================================
 
 if __name__ == "__main__":
-    print("🚀 Starting Nexus Connector UI...")
-    print(f"📁 Projects will be saved to: {PROJECTS_DIR.absolute()}")
+    print("🎨 Starting Nexus Vibe Code...")
+    print(f"📁 Projects: {PROJECTS_DIR.absolute()}")
     print()
 
     app = create_ui()
     app.launch(
         server_name="0.0.0.0",
         server_port=7860,
-        share=False,  # Set to True to get a public URL
-        inbrowser=True,  # Auto-open browser
+        share=False,
+        inbrowser=True,
     )
