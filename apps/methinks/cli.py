@@ -15,6 +15,25 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+# Load .env files - check multiple locations
+try:
+    from dotenv import load_dotenv
+
+    # 1. Load from package directory (apps/methinks/.env)
+    package_env = Path(__file__).parent / ".env"
+    if package_env.exists():
+        load_dotenv(package_env)
+
+    # 2. Load from ~/.methinks/.env
+    home_env = Path.home() / ".methinks" / ".env"
+    if home_env.exists():
+        load_dotenv(home_env)
+
+    # 3. Load from current directory
+    load_dotenv()
+except ImportError:
+    pass
+
 import click
 from rich.console import Console
 from rich.panel import Panel
