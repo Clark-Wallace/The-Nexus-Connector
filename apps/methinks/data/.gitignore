@@ -1,0 +1,6 @@
+# Keep sessions private - don't commit user data
+sessions/
+config.json
+
+# But keep the directory structure
+!.gitignore
