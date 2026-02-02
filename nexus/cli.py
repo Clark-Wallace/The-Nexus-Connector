@@ -2152,6 +2152,32 @@ def vibe(provider: Optional[str], chill: bool, ideas: bool):
             break
 
 
+@cli.command()
+@click.option("--provider", "-p", default=None, help="AI provider")
+def tui(provider: Optional[str]):
+    """
+    🎨 Launch the Vibe Code TUI (graphical terminal interface)
+
+    A beautiful terminal UI with clickable buttons, panels, and live updates.
+
+    \b
+    Example:
+        nexus tui
+        nexus tui --provider anthropic
+    """
+    if not provider:
+        provider = get_default_provider()
+
+    try:
+        from .tui import run_tui
+        run_tui(provider=provider)
+    except ImportError as e:
+        console.print("[red]Error:[/red] TUI requires 'textual' library")
+        console.print("Install with: [cyan]pip install textual[/cyan]")
+        console.print(f"\n[dim]Details: {e}[/dim]")
+        sys.exit(1)
+
+
 def main():
     """Main entry point."""
     cli()
