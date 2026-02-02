@@ -60,12 +60,30 @@ def create_connector(provider: str, model: Optional[str] = None, **kwargs) -> Un
         console.print(f"Set the {provider.upper()}_API_KEY environment variable")
         sys.exit(1)
 
-    return UnifiedAIWrapper(
+    # Extract hooks before passing to wrapper
+    on_tool_call = kwargs.pop("on_tool_call", None)
+    on_tool_result = kwargs.pop("on_tool_result", None)
+    on_step = kwargs.pop("on_step", None)
+    on_error = kwargs.pop("on_error", None)
+
+    wrapper = UnifiedAIWrapper(
         provider=provider,
         api_key=api_key or "",
         model=model,
         **kwargs
     )
+
+    # Set hooks if provided
+    if on_tool_call:
+        wrapper._on_tool_call = on_tool_call
+    if on_tool_result:
+        wrapper._on_tool_result = on_tool_result
+    if on_step:
+        wrapper._on_step = on_step
+    if on_error:
+        wrapper._on_error = on_error
+
+    return wrapper
 
 
 @click.group(invoke_without_command=True)
@@ -254,27 +272,52 @@ def chat(provider: str, model: Optional[str], system: Optional[str], no_stream: 
             console.print("\n[bold green]Assistant:[/bold green] ", end="")
 
             try:
-                response = asyncio.run(connector.send_message(user_input))
-                content = response.get("content", "")
+                if no_stream:
+                    # Non-streaming mode
+                    response = asyncio.run(connector.send_message(user_input))
+                    content = response.get("content", "")
+                    if content:
+                        console.print(Markdown(content))
+                    usage = response.get("usage", {})
+                else:
+                    # Streaming mode (default) - show tokens as they arrive
+                    from .core.base_connector import Message
 
-                # Render as markdown
-                if content:
-                    console.print(Markdown(content))
+                    # Add to history first
+                    connector.conversation_history.append(
+                        Message(role="user", content=user_input)
+                    )
 
-                # Show tool calls if any
-                tool_calls = response.get("tool_calls", [])
-                if tool_calls:
-                    console.print("\n[dim]Tool calls:[/dim]")
-                    for tc in tool_calls:
-                        name = tc.get("name", tc.get("function", {}).get("name", "unknown"))
-                        console.print(f"  • {name}")
+                    full_response = ""
+                    async def do_stream():
+                        nonlocal full_response
+                        async for chunk in connector.connector.stream_message(
+                            connector.conversation_history
+                        ):
+                            console.print(chunk, end="")
+                            full_response += chunk
 
-                # Show token usage if available
-                usage = response.get("usage", {})
+                    asyncio.run(do_stream())
+                    console.print()  # Newline after streaming
+
+                    # Add assistant response to history
+                    if full_response:
+                        connector.conversation_history.append(
+                            Message(role="assistant", content=full_response)
+                        )
+
+                    # Estimate tokens for streaming (no usage data available)
+                    usage = {
+                        "total_tokens": len(user_input.split()) + len(full_response.split()) * 2
+                    }
+
+                # Show token usage
                 if usage:
                     total = usage.get("total_tokens", 0)
                     if total:
-                        console.print(f"\n[dim]Tokens: {total}[/dim]")
+                        # Estimate cost (rough)
+                        cost = total * 0.00001  # ~$0.01 per 1K tokens average
+                        console.print(f"\n[dim]Tokens: ~{total} | Cost: ~${cost:.4f}[/dim]")
 
             except Exception as e:
                 console.print(f"[red]Error: {e}[/red]")
@@ -293,8 +336,9 @@ def chat(provider: str, model: Optional[str], system: Optional[str], no_stream: 
 @click.option("--output", "-o", default=None, help="Output directory for created files")
 @click.option("--max-iterations", default=10, help="Maximum iterations")
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed progress")
+@click.option("--quiet", "-q", is_flag=True, help="Minimal output")
 def run(task: str, provider: str, model: Optional[str], output: Optional[str],
-        max_iterations: int, verbose: bool):
+        max_iterations: int, verbose: bool, quiet: bool):
     """
     Execute a one-shot task.
 
@@ -303,35 +347,79 @@ def run(task: str, provider: str, model: Optional[str], output: Optional[str],
     """
     workspace = Path(output) if output else Path.cwd()
 
+    # Track tool calls for live display
+    current_step = [0]
+    tool_count = [0]
+
+    def on_tool_call(tc):
+        """Show tool calls as they happen."""
+        tool_count[0] += 1
+        name = tc.get("name", "unknown")
+        args = tc.get("arguments", {})
+
+        # Get relevant arg to display
+        if "path" in args:
+            detail = args["path"]
+        elif "command" in args:
+            detail = args["command"][:40] + "..." if len(args.get("command", "")) > 40 else args.get("command", "")
+        elif "content" in args:
+            detail = f"{len(args['content'])} chars"
+        else:
+            detail = ""
+
+        icon = {
+            "create_file": "📝",
+            "write_file": "📝",
+            "read_file": "📖",
+            "execute_command": "⚡",
+            "run_command": "⚡",
+            "list_directory": "📁",
+            "search_files": "🔍",
+        }.get(name, "🔧")
+
+        if not quiet:
+            if detail:
+                console.print(f"  {icon} [cyan]{name}[/cyan] → {detail}")
+            else:
+                console.print(f"  {icon} [cyan]{name}[/cyan]")
+
+    def on_tool_result(tr):
+        """Show tool results."""
+        success = tr.get("success", True)
+        if not success and not quiet:
+            error = tr.get("error", "Unknown error")
+            console.print(f"    [red]✗ {error}[/red]")
+
+    def on_step(step, status):
+        """Show iteration progress."""
+        current_step[0] = step
+        if not quiet and status == "starting":
+            console.print(f"\n[dim]Step {step}[/dim]")
+
     connector = create_connector(
         provider,
         model,
         workspace=workspace,
         max_iterations=max_iterations,
-        verbose=verbose
+        verbose=verbose,
+        on_tool_call=on_tool_call,
+        on_tool_result=on_tool_result,
+        on_step=on_step,
     )
 
-    console.print(Panel(
-        f"[bold]Task:[/bold] {task}\n"
-        f"[dim]Provider: {provider} | Model: {connector.connector.model}[/dim]",
-        title="Executing Task",
-        border_style="blue"
-    ))
+    if not quiet:
+        console.print(Panel(
+            f"[bold]Task:[/bold] {task}\n"
+            f"[dim]Provider: {provider} | Model: {connector.connector.model}[/dim]",
+            title="🚀 Executing Task",
+            border_style="blue"
+        ))
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task_progress = progress.add_task("Working...", total=None)
-
-        try:
-            result = asyncio.run(connector.execute_task(task, show_progress=verbose))
-            progress.update(task_progress, description="Complete!")
-        except Exception as e:
-            progress.update(task_progress, description=f"Failed: {e}")
-            console.print(f"[red]Error: {e}[/red]")
-            sys.exit(1)
+    try:
+        result = asyncio.run(connector.execute_task(task, show_progress=False))
+    except Exception as e:
+        console.print(f"\n[red]Error: {e}[/red]")
+        sys.exit(1)
 
     # Display results
     if result.success:
@@ -342,20 +430,23 @@ def run(task: str, provider: str, model: Optional[str], output: Optional[str],
             console.print(f"[red]Error: {result.error}[/red]")
 
     # Show created files
-    if result.files_created:
+    if result.files_created and not quiet:
         console.print("\n[bold]Files created:[/bold]")
         for f in result.files_created:
-            console.print(f"  • {f}")
+            console.print(f"  📄 {f}")
 
-    if result.files_modified:
+    if result.files_modified and not quiet:
         console.print("\n[bold]Files modified:[/bold]")
         for f in result.files_modified:
-            console.print(f"  • {f}")
+            console.print(f"  ✏️  {f}")
 
-    # Show metrics
-    console.print(f"\n[dim]Iterations: {result.iterations} | "
+    # Show metrics with cost estimate
+    cost = result.tokens_used * 0.00001  # ~$0.01 per 1K tokens average
+    console.print(f"\n[dim]Steps: {result.iterations} | "
+                  f"Tools: {tool_count[0]} | "
                   f"Tokens: {result.tokens_used} | "
-                  f"Duration: {result.duration:.2f}s[/dim]")
+                  f"Cost: ~${cost:.4f} | "
+                  f"Time: {result.duration:.1f}s[/dim]")
 
     # Show final content
     if result.content and verbose:
