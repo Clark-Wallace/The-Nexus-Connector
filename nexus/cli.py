@@ -1257,6 +1257,628 @@ def status(ctx):
         console.print(f"\n[dim]{ready_count} provider(s) ready[/dim]")
 
 
+# =============================================================================
+# DEVELOPER TOOLS
+# =============================================================================
+# These commands provide readable terminal UX for common dev tasks.
+
+
+def read_file_content(filepath: str) -> tuple[str, str]:
+    """Read file content and detect language from extension."""
+    path = Path(filepath)
+    if not path.exists():
+        raise click.ClickException(f"File not found: {filepath}")
+
+    content = path.read_text()
+
+    # Detect language from extension
+    ext_map = {
+        ".py": "python",
+        ".js": "javascript",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".jsx": "javascript",
+        ".go": "go",
+        ".rs": "rust",
+        ".rb": "ruby",
+        ".java": "java",
+        ".cpp": "cpp",
+        ".c": "c",
+        ".h": "c",
+        ".cs": "csharp",
+        ".php": "php",
+        ".swift": "swift",
+        ".kt": "kotlin",
+        ".scala": "scala",
+        ".sh": "bash",
+        ".bash": "bash",
+        ".zsh": "zsh",
+        ".sql": "sql",
+        ".html": "html",
+        ".css": "css",
+        ".json": "json",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".md": "markdown",
+        ".toml": "toml",
+    }
+    lang = ext_map.get(path.suffix.lower(), "text")
+
+    return content, lang
+
+
+def get_project_context() -> Dict[str, Any]:
+    """Gather project context from current directory."""
+    cwd = Path.cwd()
+    context = {
+        "directory": str(cwd),
+        "project_type": None,
+        "files": [],
+    }
+
+    # Detect project type
+    if (cwd / "package.json").exists():
+        context["project_type"] = "node"
+    elif (cwd / "pyproject.toml").exists() or (cwd / "setup.py").exists():
+        context["project_type"] = "python"
+    elif (cwd / "Cargo.toml").exists():
+        context["project_type"] = "rust"
+    elif (cwd / "go.mod").exists():
+        context["project_type"] = "go"
+    elif (cwd / "Gemfile").exists():
+        context["project_type"] = "ruby"
+
+    return context
+
+
+def stream_ai_response(connector, prompt: str, panel_title: str = "Response") -> str:
+    """Stream AI response with nice terminal output."""
+    from .core.base_connector import Message
+
+    connector.conversation_history.append(Message(role="user", content=prompt))
+
+    full_response = ""
+
+    async def do_stream():
+        nonlocal full_response
+        async for chunk in connector.connector.stream_message(
+            connector.conversation_history
+        ):
+            console.print(chunk, end="")
+            full_response += chunk
+
+    console.print(f"\n[bold cyan]{'─' * 60}[/bold cyan]")
+    asyncio.run(do_stream())
+    console.print(f"\n[bold cyan]{'─' * 60}[/bold cyan]\n")
+
+    # Add to history
+    if full_response:
+        connector.conversation_history.append(
+            Message(role="assistant", content=full_response)
+        )
+
+    return full_response
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--provider", "-p", default=None, help="AI provider")
+@click.option("--focus", "-f", type=click.Choice(["security", "performance", "style", "bugs", "all"]),
+              default="all", help="Review focus area")
+@click.pass_context
+def review(ctx, file: str, provider: Optional[str], focus: str):
+    """
+    AI-powered code review.
+
+    Analyzes code for bugs, security issues, style, and improvements.
+
+    \b
+    Examples:
+        nexus review src/api.py
+        nexus review main.go --focus security
+        nexus review app.ts --focus performance
+    """
+    if not provider:
+        provider = get_default_provider()
+
+    content, lang = read_file_content(file)
+    filename = Path(file).name
+
+    # Build focused prompt
+    focus_instructions = {
+        "security": "Focus specifically on security vulnerabilities, injection risks, authentication issues, and data exposure.",
+        "performance": "Focus specifically on performance bottlenecks, memory leaks, inefficient algorithms, and optimization opportunities.",
+        "style": "Focus specifically on code style, naming conventions, readability, and adherence to best practices.",
+        "bugs": "Focus specifically on potential bugs, edge cases, error handling, and logical errors.",
+        "all": "Review all aspects: bugs, security, performance, style, and general improvements."
+    }
+
+    console.print(Panel(
+        f"[bold]File:[/bold] {file}\n"
+        f"[bold]Language:[/bold] {lang}\n"
+        f"[bold]Focus:[/bold] {focus}\n"
+        f"[bold]Lines:[/bold] {len(content.splitlines())}",
+        title="🔍 Code Review",
+        border_style="blue"
+    ))
+
+    connector = create_connector(provider, verbose=False)
+
+    prompt = f"""Review this {lang} code from `{filename}`.
+
+{focus_instructions[focus]}
+
+Structure your review as:
+
+## Summary
+Brief overall assessment (1-2 sentences)
+
+## Issues Found
+List each issue with:
+- 🔴 **Critical**: [description] (line X)
+- 🟡 **Warning**: [description] (line X)
+- 🔵 **Suggestion**: [description] (line X)
+
+## Recommendations
+Top 3 actionable improvements
+
+---
+
+```{lang}
+{content}
+```"""
+
+    stream_ai_response(connector, prompt, "Review Results")
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--provider", "-p", default=None, help="AI provider")
+@click.option("--framework", "-f", default=None, help="Test framework (pytest, jest, go test, etc.)")
+@click.option("--output", "-o", default=None, help="Output file for generated tests")
+@click.pass_context
+def test(ctx, file: str, provider: Optional[str], framework: Optional[str], output: Optional[str]):
+    """
+    Generate tests for a file.
+
+    Creates unit tests based on the code structure.
+
+    \b
+    Examples:
+        nexus test src/utils.py
+        nexus test api.ts --framework jest
+        nexus test main.go -o main_test.go
+    """
+    if not provider:
+        provider = get_default_provider()
+
+    content, lang = read_file_content(file)
+    filename = Path(file).name
+
+    # Auto-detect test framework
+    if not framework:
+        framework_map = {
+            "python": "pytest",
+            "javascript": "jest",
+            "typescript": "jest",
+            "go": "go test",
+            "rust": "cargo test",
+            "ruby": "rspec",
+            "java": "junit",
+        }
+        framework = framework_map.get(lang, "standard unit tests")
+
+    console.print(Panel(
+        f"[bold]File:[/bold] {file}\n"
+        f"[bold]Language:[/bold] {lang}\n"
+        f"[bold]Framework:[/bold] {framework}",
+        title="🧪 Generate Tests",
+        border_style="green"
+    ))
+
+    connector = create_connector(provider, verbose=False)
+
+    prompt = f"""Generate comprehensive unit tests for this {lang} code using {framework}.
+
+Requirements:
+1. Test all public functions/methods
+2. Include edge cases and error conditions
+3. Use descriptive test names
+4. Add brief comments explaining what each test verifies
+5. Follow {framework} best practices
+
+Structure:
+- Setup/fixtures if needed
+- Happy path tests
+- Edge case tests
+- Error handling tests
+
+---
+
+```{lang}
+{content}
+```
+
+Generate the complete test file:"""
+
+    response = stream_ai_response(connector, prompt, "Generated Tests")
+
+    # Extract code block if present
+    if "```" in response:
+        import re
+        code_match = re.search(r'```(?:\w+)?\n(.*?)```', response, re.DOTALL)
+        if code_match:
+            test_code = code_match.group(1).strip()
+
+            if output:
+                Path(output).write_text(test_code)
+                console.print(f"\n[green]✓[/green] Tests written to: {output}")
+            else:
+                # Suggest output file
+                suggested = Path(file).stem + "_test" + Path(file).suffix
+                console.print(f"\n[dim]Tip: Use -o {suggested} to save tests to a file[/dim]")
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--provider", "-p", default=None, help="AI provider")
+@click.option("--style", "-s", type=click.Choice(["docstring", "markdown", "readme", "api"]),
+              default="docstring", help="Documentation style")
+@click.option("--output", "-o", default=None, help="Output file")
+@click.pass_context
+def docs(ctx, file: str, provider: Optional[str], style: str, output: Optional[str]):
+    """
+    Generate documentation for a file.
+
+    Creates docstrings, markdown docs, or API reference.
+
+    \b
+    Examples:
+        nexus docs src/api.py
+        nexus docs lib/utils.ts --style markdown
+        nexus docs handlers.go --style api -o API.md
+    """
+    if not provider:
+        provider = get_default_provider()
+
+    content, lang = read_file_content(file)
+    filename = Path(file).name
+
+    style_instructions = {
+        "docstring": f"Add comprehensive docstrings/comments to all functions, classes, and modules following {lang} conventions.",
+        "markdown": "Create a markdown document explaining the code with sections for Overview, Functions/Classes, Usage Examples, and Notes.",
+        "readme": "Create a README.md style document with installation, usage examples, and API overview.",
+        "api": "Create API reference documentation with all public interfaces, parameters, return types, and examples.",
+    }
+
+    console.print(Panel(
+        f"[bold]File:[/bold] {file}\n"
+        f"[bold]Language:[/bold] {lang}\n"
+        f"[bold]Style:[/bold] {style}",
+        title="📚 Generate Documentation",
+        border_style="yellow"
+    ))
+
+    connector = create_connector(provider, verbose=False)
+
+    prompt = f"""Generate documentation for this {lang} code.
+
+Task: {style_instructions[style]}
+
+Requirements:
+1. Be accurate - only document what the code actually does
+2. Include parameter types and return types
+3. Add usage examples where helpful
+4. Note any important caveats or edge cases
+
+---
+
+```{lang}
+{content}
+```
+
+Generate the documentation:"""
+
+    response = stream_ai_response(connector, prompt, "Generated Documentation")
+
+    if output:
+        Path(output).write_text(response)
+        console.print(f"\n[green]✓[/green] Documentation written to: {output}")
+
+
+@cli.command()
+@click.argument("target", required=False)
+@click.option("--provider", "-p", default=None, help="AI provider")
+@click.option("--error", "-e", default=None, help="Error message to explain")
+@click.pass_context
+def explain(ctx, target: Optional[str], provider: Optional[str], error: Optional[str]):
+    """
+    Explain code or errors.
+
+    Can explain a file, code snippet, or error message.
+
+    \b
+    Examples:
+        nexus explain src/complex.py
+        nexus explain --error "TypeError: Cannot read property 'x' of undefined"
+        cat error.log | nexus explain
+    """
+    if not provider:
+        provider = get_default_provider()
+
+    # Determine what to explain
+    if error:
+        # Explain an error message
+        console.print(Panel(
+            f"[bold]Error:[/bold]\n{error[:200]}{'...' if len(error) > 200 else ''}",
+            title="❓ Explain Error",
+            border_style="red"
+        ))
+
+        connector = create_connector(provider, verbose=False)
+        prompt = f"""Explain this error message in plain terms:
+
+```
+{error}
+```
+
+Structure your explanation as:
+
+## What This Error Means
+Simple explanation of what went wrong
+
+## Common Causes
+- Cause 1
+- Cause 2
+- Cause 3
+
+## How To Fix It
+Step-by-step debugging approach
+
+## Example Fix
+Show a code example if applicable"""
+
+    elif target and Path(target).exists():
+        # Explain a file
+        content, lang = read_file_content(target)
+
+        console.print(Panel(
+            f"[bold]File:[/bold] {target}\n"
+            f"[bold]Language:[/bold] {lang}\n"
+            f"[bold]Lines:[/bold] {len(content.splitlines())}",
+            title="❓ Explain Code",
+            border_style="magenta"
+        ))
+
+        connector = create_connector(provider, verbose=False)
+        prompt = f"""Explain this {lang} code clearly.
+
+Structure your explanation as:
+
+## Overview
+What this code does in 1-2 sentences
+
+## How It Works
+Step-by-step walkthrough of the logic
+
+## Key Concepts
+Important patterns, algorithms, or techniques used
+
+## Dependencies
+External libraries or systems it interacts with
+
+---
+
+```{lang}
+{content}
+```"""
+
+    elif has_stdin_data():
+        # Explain piped input (likely an error)
+        piped_input = sys.stdin.read().strip()
+
+        console.print(Panel(
+            f"[bold]Input:[/bold]\n{piped_input[:300]}{'...' if len(piped_input) > 300 else ''}",
+            title="❓ Explain",
+            border_style="magenta"
+        ))
+
+        connector = create_connector(provider, verbose=False)
+        prompt = f"""Explain this:
+
+```
+{piped_input}
+```
+
+If it's an error, explain what went wrong and how to fix it.
+If it's code, explain what it does.
+If it's output/logs, explain what happened."""
+
+    else:
+        raise click.ClickException("Provide a file path, --error message, or pipe input")
+
+    stream_ai_response(connector, prompt, "Explanation")
+
+
+@cli.command()
+@click.argument("file", required=False, type=click.Path(exists=True))
+@click.option("--provider", "-p", default=None, help="AI provider")
+@click.option("--error", "-e", default=None, help="Error message to fix")
+@click.option("--apply", "-a", is_flag=True, help="Apply fix directly to file")
+@click.pass_context
+def fix(ctx, file: Optional[str], provider: Optional[str], error: Optional[str], apply: bool):
+    """
+    Fix code based on an error.
+
+    Analyzes errors and suggests or applies fixes.
+
+    \b
+    Examples:
+        nexus fix src/api.py --error "NameError: name 'foo' is not defined"
+        python app.py 2>&1 | nexus fix src/app.py
+        nexus fix main.go --error "undefined: fmt" --apply
+    """
+    if not provider:
+        provider = get_default_provider()
+
+    # Get error from flag or stdin
+    error_msg = error
+    if not error_msg and has_stdin_data():
+        error_msg = sys.stdin.read().strip()
+
+    if not error_msg:
+        raise click.ClickException("Provide --error message or pipe error output")
+
+    if not file:
+        raise click.ClickException("Provide the file to fix")
+
+    content, lang = read_file_content(file)
+    filename = Path(file).name
+
+    console.print(Panel(
+        f"[bold]File:[/bold] {file}\n"
+        f"[bold]Error:[/bold]\n{error_msg[:200]}{'...' if len(error_msg) > 200 else ''}",
+        title="🔧 Fix Code",
+        border_style="red"
+    ))
+
+    connector = create_connector(provider, verbose=False)
+
+    prompt = f"""Fix this {lang} code based on the error.
+
+## Error
+```
+{error_msg}
+```
+
+## Current Code ({filename})
+```{lang}
+{content}
+```
+
+## Instructions
+1. Identify the root cause of the error
+2. Provide the corrected code
+3. Explain what you changed and why
+
+Structure your response as:
+
+## Problem
+What caused the error (1-2 sentences)
+
+## Solution
+```{lang}
+[THE COMPLETE FIXED CODE - not just the changed parts]
+```
+
+## Changes Made
+- Change 1: description
+- Change 2: description"""
+
+    response = stream_ai_response(connector, prompt, "Fix")
+
+    # Extract fixed code if --apply
+    if apply:
+        import re
+        # Find the solution code block
+        code_match = re.search(r'## Solution\s*```(?:\w+)?\n(.*?)```', response, re.DOTALL)
+        if code_match:
+            fixed_code = code_match.group(1).strip()
+
+            # Backup original
+            backup_path = Path(file).with_suffix(Path(file).suffix + ".bak")
+            Path(file).rename(backup_path)
+
+            # Write fixed code
+            Path(file).write_text(fixed_code)
+            console.print(f"\n[green]✓[/green] Fix applied to: {file}")
+            console.print(f"[dim]  Backup saved to: {backup_path}[/dim]")
+        else:
+            console.print("\n[yellow]Could not extract fixed code. Apply manually.[/yellow]")
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--provider", "-p", default=None, help="AI provider")
+@click.option("--goal", "-g", default=None, help="Refactoring goal")
+@click.option("--output", "-o", default=None, help="Output file (default: overwrite)")
+@click.pass_context
+def refactor(ctx, file: str, provider: Optional[str], goal: Optional[str], output: Optional[str]):
+    """
+    Refactor code with AI suggestions.
+
+    Improves code structure, readability, and maintainability.
+
+    \b
+    Examples:
+        nexus refactor src/legacy.py
+        nexus refactor utils.ts --goal "split into smaller functions"
+        nexus refactor api.go --goal "add error handling" -o api_v2.go
+    """
+    if not provider:
+        provider = get_default_provider()
+
+    content, lang = read_file_content(file)
+    filename = Path(file).name
+
+    goal_text = goal if goal else "Improve code quality, readability, and maintainability"
+
+    console.print(Panel(
+        f"[bold]File:[/bold] {file}\n"
+        f"[bold]Language:[/bold] {lang}\n"
+        f"[bold]Goal:[/bold] {goal_text}",
+        title="♻️  Refactor",
+        border_style="cyan"
+    ))
+
+    connector = create_connector(provider, verbose=False)
+
+    prompt = f"""Refactor this {lang} code.
+
+## Goal
+{goal_text}
+
+## Current Code ({filename})
+```{lang}
+{content}
+```
+
+## Instructions
+1. Apply the refactoring while preserving functionality
+2. Follow {lang} best practices and conventions
+3. Explain your changes
+
+Structure your response as:
+
+## Summary
+What refactoring was applied (1-2 sentences)
+
+## Refactored Code
+```{lang}
+[THE COMPLETE REFACTORED CODE]
+```
+
+## Changes Made
+- **Change 1**: description
+- **Change 2**: description
+- **Change 3**: description
+
+## Benefits
+- Benefit 1
+- Benefit 2"""
+
+    response = stream_ai_response(connector, prompt, "Refactored Code")
+
+    # Extract code if output specified
+    if output:
+        import re
+        code_match = re.search(r'## Refactored Code\s*```(?:\w+)?\n(.*?)```', response, re.DOTALL)
+        if code_match:
+            refactored_code = code_match.group(1).strip()
+            Path(output).write_text(refactored_code)
+            console.print(f"\n[green]✓[/green] Refactored code written to: {output}")
+
+
 def main():
     """Main entry point."""
     cli()
