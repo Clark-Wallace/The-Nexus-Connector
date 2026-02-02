@@ -493,21 +493,34 @@ def methinks_random(provider: str) -> Tuple[str, str, str]:
     )
 
 
-def use_idea_in_vibe(idea_text: str) -> str:
-    """Extract a buildable prompt from idea text for Vibe Code."""
-    # Try to extract the first project name and description
+def extract_idea_by_number(idea_text: str, number: int) -> str:
+    """Extract a specific idea (1, 2, or 3) from Mr. MeThinks output."""
     lines = idea_text.split('\n')
+    ideas = []
+    current_idea = None
+
     for i, line in enumerate(lines):
         if '###' in line and '🎯' in line:
             # Found a project header
             name = line.replace('###', '').replace('🎯', '').strip()
             # Look for "What it is" in next few lines
-            for j in range(i+1, min(i+5, len(lines))):
+            desc = ""
+            for j in range(i+1, min(i+6, len(lines))):
                 if 'What it is' in lines[j]:
                     desc = lines[j].split(':', 1)[-1].strip().strip('*')
-                    return f"Build {name}: {desc}"
+                    break
+            ideas.append({"name": name, "desc": desc})
+
+    if 0 < number <= len(ideas):
+        idea = ideas[number - 1]
+        return f"Build {idea['name']}: {idea['desc']}"
 
     return "Build me something cool"
+
+
+def use_idea_in_vibe(idea_text: str) -> str:
+    """Extract the first buildable prompt from idea text for Vibe Code."""
+    return extract_idea_by_number(idea_text, 1)
 
 
 # =============================================================================
@@ -660,9 +673,13 @@ Fill in the boxes on the left and hit **Think!** 🧠✨
 Or hit **Random** 🎲 for instant inspiration!"""
                         )
 
-                        methinks_use_btn = gr.Button("🚀 Let's Build This!", variant="secondary", visible=True)
+                        gr.Markdown("### 👆 Pick one to build:")
+                        with gr.Row():
+                            idea_btn_1 = gr.Button("1️⃣ Build Idea 1", scale=1)
+                            idea_btn_2 = gr.Button("2️⃣ Build Idea 2", scale=1)
+                            idea_btn_3 = gr.Button("3️⃣ Build Idea 3", scale=1)
 
-                # Store the last result for "use this" button
+                # Store the last result for idea extraction
                 methinks_last_result = gr.State("")
 
             # =================================================================
@@ -843,21 +860,31 @@ python ui.py
             outputs=[methinks_interests, methinks_skill, methinks_problem],
         )
 
-        # "Let's Build This" button - takes the idea to Vibe Code
-        def use_idea(last_result):
+        # Idea buttons - pick a specific idea to build
+        def use_idea_n(last_result, idea_num):
             if not last_result:
-                return [], [], "*No files created yet*", "💡 **Go to the Vibe Code tab to start building!**\n\nYour idea is ready."
+                return [], [], "*No files created yet*", "💡 **Hit 'Think!' first to generate ideas!**"
 
-            # Extract a buildable prompt from the idea
-            prompt = use_idea_in_vibe(last_result)
+            # Extract the specific idea
+            prompt = extract_idea_by_number(last_result, idea_num)
 
             # Add as first message in a new session
             new_history = [{"role": "user", "content": f"🚀 **From Mr. MeThinks:**\n\n{prompt}"}]
 
-            return new_history, [], "*No files created yet*", "💡 **Now go to the 🎨 Vibe Code tab** and hit Send to start building!"
+            return new_history, [], "*No files created yet*", f"💡 **Idea {idea_num} loaded!** Go to 🎨 Vibe Code tab and hit Send!"
 
-        methinks_use_btn.click(
-            use_idea,
+        idea_btn_1.click(
+            lambda r: use_idea_n(r, 1),
+            inputs=[methinks_last_result],
+            outputs=[vibe_chat, files_state, files_display, sparks_display],
+        )
+        idea_btn_2.click(
+            lambda r: use_idea_n(r, 2),
+            inputs=[methinks_last_result],
+            outputs=[vibe_chat, files_state, files_display, sparks_display],
+        )
+        idea_btn_3.click(
+            lambda r: use_idea_n(r, 3),
             inputs=[methinks_last_result],
             outputs=[vibe_chat, files_state, files_display, sparks_display],
         )
