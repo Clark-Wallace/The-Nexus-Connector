@@ -844,21 +844,21 @@ python ui.py
         )
 
         # "Let's Build This" button - takes the idea to Vibe Code
-        def use_idea(last_result, current_history, current_files):
+        def use_idea(last_result):
             if not last_result:
-                return current_history, current_files, "*No files created yet*", "", gr.Tabs(selected="vibe")
+                return [], [], "*No files created yet*", "💡 **Go to the Vibe Code tab to start building!**\n\nYour idea is ready."
 
             # Extract a buildable prompt from the idea
             prompt = use_idea_in_vibe(last_result)
 
             # Add as first message in a new session
-            new_history = [{"role": "user", "content": prompt}]
+            new_history = [{"role": "user", "content": f"🚀 **From Mr. MeThinks:**\n\n{prompt}"}]
 
-            return new_history, [], "*No files created yet*", "", gr.Tabs(selected="vibe")
+            return new_history, [], "*No files created yet*", "💡 **Now go to the 🎨 Vibe Code tab** and hit Send to start building!"
 
         methinks_use_btn.click(
             use_idea,
-            inputs=[methinks_last_result, vibe_chat, files_state],
+            inputs=[methinks_last_result],
             outputs=[vibe_chat, files_state, files_display, sparks_display],
         )
 
