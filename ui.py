@@ -109,8 +109,12 @@ def get_connector(provider: str, session_id: str = "vibe"):
 # SPARK GENERATION - Contextual suggestions
 # =============================================================================
 
-def generate_sparks(context: str, chill_mode: bool) -> List[Dict[str, str]]:
+def generate_sparks(context, chill_mode: bool) -> List[Dict[str, str]]:
     """Generate contextual next-step suggestions based on what was built."""
+
+    # Safety: ensure context is a string
+    if not isinstance(context, str):
+        context = str(context) if context else ""
 
     # Detect what was built from context
     context_lower = context.lower()
