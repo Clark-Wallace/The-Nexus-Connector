@@ -318,10 +318,12 @@ class VibeCodeApp(App):
         """Add a message to the chat."""
         chat_panel = self.query_one("#chat-panel", ScrollableContainer)
 
-        # Remove placeholder
-        placeholder = self.query_one("#chat-placeholder", Static)
-        if placeholder:
+        # Remove placeholder if it exists
+        try:
+            placeholder = self.query_one("#chat-placeholder", Static)
             placeholder.remove()
+        except Exception:
+            pass  # Already removed
 
         # Add message
         chat_panel.mount(ChatMessage(role, content))
@@ -331,11 +333,14 @@ class VibeCodeApp(App):
         """Update the files sidebar."""
         files_list = self.query_one("#files-list", Vertical)
 
-        # Clear existing
-        no_files = self.query_one("#no-files", Static)
-        if no_files:
+        # Clear existing "no files" message
+        try:
+            no_files = self.query_one("#no-files", Static)
             no_files.remove()
+        except Exception:
+            pass  # Already removed
 
+        # Remove existing file items
         for child in list(files_list.children):
             if isinstance(child, FileItem):
                 child.remove()
