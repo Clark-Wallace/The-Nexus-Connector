@@ -16,6 +16,11 @@
   - [GoogleConnector](#googleconnector)
   - [XAIConnector](#xaiconnector)
   - [DeepSeekConnector](#deepseekconnector)
+  - [OllamaConnector](#ollamaconnector)
+- [Web Components](#web-components)
+  - [WebConnector](#webconnector)
+  - [WebSocketManager](#websocketmanager)
+  - [SessionStore](#sessionstore)
 - [Utilities](#utilities)
   - [ToolExecutor](#toolexecutor)
   - [TextApplyEngine](#textapplyengine)
@@ -158,6 +163,7 @@ class AIProvider(Enum):
     GOOGLE = "google"
     XAI = "xai"
     DEEPSEEK = "deepseek"
+    OLLAMA = "ollama"
 ```
 
 #### Properties
@@ -316,13 +322,17 @@ class AnthropicConnector(BaseConnector):
 ```
 
 **Supported Models:**
-- claude-3-opus-20240229
+- claude-sonnet-4-20250514
+- claude-opus-4-20250514
+- claude-3-7-sonnet-20250219
 - claude-3-5-sonnet-20241022
+- claude-3-5-haiku-20241022
+- claude-3-opus-20240229
 - claude-3-haiku-20240307
 
 ### GoogleConnector
 
-Connector for Google Gemini models.
+Connector for Google Gemini models. Uses the `google-genai` SDK with native function calling support.
 
 ```python
 class GoogleConnector(BaseConnector):
@@ -335,9 +345,16 @@ class GoogleConnector(BaseConnector):
 ```
 
 **Supported Models:**
-- gemini-2.0-flash
+- gemini-2.0-flash (default)
+- gemini-2.0-flash-exp
+- gemini-2.0-pro
+- gemini-2.0-pro-exp
 - gemini-1.5-pro
+- gemini-1.5-pro-latest
 - gemini-1.5-flash
+- gemini-1.5-flash-latest
+
+**Note:** Native function calling is supported for Gemini 1.5 and 2.0 models.
 
 ### XAIConnector
 
@@ -374,6 +391,95 @@ class DeepSeekConnector(OpenAIConnector):
 **Supported Models:**
 - deepseek-chat
 - deepseek-coder
+
+### OllamaConnector
+
+Connector for local Ollama models.
+
+```python
+class OllamaConnector(BaseConnector):
+    def __init__(
+        self,
+        api_key: str = "",  # Not required for local
+        model: Optional[str] = None,
+        host: str = "http://localhost:11434",
+        **kwargs
+    )
+```
+
+**Supported Models:**
+- Any model installed locally via `ollama pull`
+- Default: llama3.2
+
+**Note:** Requires Ollama running locally. No API key needed.
+
+---
+
+## Web Components
+
+### WebConnector
+
+FastAPI-based web server for HTTP API access.
+
+```python
+class WebConnector:
+    def __init__(
+        self,
+        wrapper_factory: Callable[[], UnifiedAIWrapper],
+        host: str = "0.0.0.0",
+        port: int = 8000,
+        cors_origins: List[str] = ["*"]
+    )
+
+    async def start_server(self) -> None
+```
+
+**Endpoints:**
+- `POST /chat` - Send a message
+- `POST /chat/stream` - Stream a response
+- `POST /task` - Execute a task
+- `GET /health` - Health check
+
+### WebSocketManager
+
+Real-time bidirectional communication via WebSocket.
+
+```python
+class WebSocketManager:
+    def __init__(
+        self,
+        wrapper_factory: Callable[[], UnifiedAIWrapper]
+    )
+
+    async def handle_connection(
+        self,
+        websocket: WebSocket,
+        session_id: Optional[str] = None
+    ) -> None
+```
+
+**Message Types:**
+- `message` - Send a chat message
+- `stream` - Stream a response
+- `task` - Execute a task
+- `clear` - Clear conversation history
+
+### SessionStore
+
+In-memory session storage with automatic cleanup.
+
+```python
+class SessionStore:
+    def __init__(
+        self,
+        ttl: int = 86400  # 24 hours
+    )
+
+    def get(self, session_id: str) -> Optional[Dict]
+    def set(self, session_id: str, data: Dict) -> None
+    def delete(self, session_id: str) -> None
+    def cleanup(self) -> int  # Returns cleaned count
+```
 
 ---
 

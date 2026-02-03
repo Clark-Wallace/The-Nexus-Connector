@@ -37,6 +37,9 @@ Nexus is designed with a modular, extensible architecture that provides a unifie
 │  ┌─────────┐ ┌──────────┐ ┌────────┐ ┌─────┐ ┌──────────┐    │
 │  │ OpenAI  │ │Anthropic │ │ Google │ │ xAI │ │ DeepSeek │    │
 │  └─────────┘ └──────────┘ └────────┘ └─────┘ └──────────┘    │
+│  ┌────────┐                                                     │
+│  │ Ollama │  (Local LLM support)                               │
+│  └────────┘                                                     │
 └─────────────────────────────────────────────────────────────────┘
              │
              ▼
@@ -91,9 +94,9 @@ Concrete implementations for each AI provider.
 - Supports all Claude 3 models
 
 **GoogleConnector:**
-- Uses Google's Python SDK
-- No native tool support (uses TextApplyEngine)
-- Handles Gemini-specific parameters
+- Uses `google-genai` SDK (new unified SDK)
+- Native function calling for Gemini 1.5/2.0 models
+- Handles Gemini-specific parameters (top_k, etc.)
 
 **XAIConnector:**
 - Extends OpenAIConnector (compatible API)
@@ -104,6 +107,12 @@ Concrete implementations for each AI provider.
 - Extends OpenAIConnector
 - Cost-optimized for large contexts
 - DeepSeek-specific endpoints
+
+**OllamaConnector:**
+- Local LLM support via Ollama
+- No API key required
+- Tool support for compatible models
+- Configurable host endpoint
 
 ### 4. ToolExecutor
 
@@ -134,6 +143,41 @@ Extracts operations from text responses for providers without native tool suppor
 - Code blocks with file indicators
 - Natural language file creation patterns
 - Shell/bash command blocks
+
+### 6. Web Components
+
+**WebConnector:**
+- FastAPI-based HTTP server
+- REST endpoints for chat, streaming, and task execution
+- CORS support for browser clients
+- Health check endpoint
+
+**WebSocketManager:**
+- Real-time bidirectional communication
+- Session-aware connections
+- Streaming message support
+- Automatic reconnection handling
+
+**SessionStore:**
+- In-memory session storage
+- Automatic TTL-based cleanup (24 hours default)
+- Thread-safe operations
+- Per-session conversation history
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Web Layer                                │
+│  ┌─────────────────┐  ┌──────────────────┐  ┌──────────────┐  │
+│  │  WebConnector   │  │ WebSocketManager │  │ SessionStore │  │
+│  │  (REST API)     │  │  (Real-time)     │  │  (State)     │  │
+│  └────────┬────────┘  └────────┬─────────┘  └──────┬───────┘  │
+│           │                    │                    │          │
+│           └────────────────────┴────────────────────┘          │
+│                              │                                  │
+│                              ▼                                  │
+│                    UnifiedAIWrapper                             │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Data Flow
 
