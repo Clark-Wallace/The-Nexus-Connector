@@ -312,7 +312,7 @@ connector = NexusConnector(
 | Provider | Models | Tool Calling | Streaming | Local |
 |----------|--------|:------------:|:---------:|:-----:|
 | **OpenAI** | GPT-4o, GPT-4, GPT-3.5 | ✅ | ✅ | ❌ |
-| **Anthropic** | Claude 3.5 Opus/Sonnet/Haiku | ✅ | ✅ | ❌ |
+| **Anthropic** | Claude 4 Opus/Sonnet, Claude 3.5 | ✅ | ✅ | ❌ |
 | **Google** | Gemini 2.0, 1.5 Pro/Flash | ✅ | ✅ | ❌ |
 | **xAI** | Grok-3, Grok-2 | ✅ | ✅ | ❌ |
 | **DeepSeek** | DeepSeek-V3, Coder | ✅ | ✅ | ❌ |

@@ -35,7 +35,7 @@ class AnthropicConnector(BaseConnector):
     
     def get_default_model(self) -> str:
         """Get default model for Anthropic."""
-        return "claude-3-5-sonnet-20241022"
+        return "claude-sonnet-4-20250514"
     
     async def send_message(
         self,
@@ -52,14 +52,27 @@ class AnthropicConnector(BaseConnector):
             if msg.role == "system":
                 system_message = msg.content
             else:
-                # Convert to Anthropic format
-                anthropic_msg = {
-                    "role": msg.role,
-                    "content": msg.content
-                }
-                
+                # Handle assistant messages with tool_use blocks
+                if msg.role == "assistant" and msg.tool_calls:
+                    content_blocks = []
+                    if msg.content:
+                        content_blocks.append({
+                            "type": "text",
+                            "text": msg.content
+                        })
+                    for tc in msg.tool_calls:
+                        content_blocks.append({
+                            "type": "tool_use",
+                            "id": tc.get("id", tc.get("tool_call_id", "")),
+                            "name": tc["name"],
+                            "input": tc.get("arguments", tc.get("input", {}))
+                        })
+                    anthropic_msg = {
+                        "role": "assistant",
+                        "content": content_blocks
+                    }
                 # Handle tool responses (Claude uses "user" role for tool results)
-                if msg.role == "tool" and msg.tool_call_id:
+                elif msg.role == "tool" and msg.tool_call_id:
                     anthropic_msg = {
                         "role": "user",
                         "content": [
@@ -70,7 +83,13 @@ class AnthropicConnector(BaseConnector):
                             }
                         ]
                     }
-                
+                else:
+                    # Convert to Anthropic format
+                    anthropic_msg = {
+                        "role": msg.role,
+                        "content": msg.content
+                    }
+
                 anthropic_messages.append(anthropic_msg)
         
         # Prepare API parameters
@@ -79,9 +98,8 @@ class AnthropicConnector(BaseConnector):
             "messages": anthropic_messages,
             "max_tokens": kwargs.get("max_tokens", self.default_max_tokens),
             "temperature": kwargs.get("temperature", 0.7),
-            "top_p": kwargs.get("top_p", 1.0),
         }
-        
+
         # Add system message if present
         if system_message:
             api_params["system"] = system_message

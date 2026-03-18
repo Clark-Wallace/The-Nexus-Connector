@@ -5,6 +5,7 @@ This establishes and manages Nexus Connections with all AI providers.
 """
 
 import asyncio
+import os
 import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union, Callable, Tuple
@@ -116,8 +117,21 @@ class UnifiedAIWrapper:
         # Validate we have a provider
         if provider is None:
             raise ValueError("provider is required (or use router='auto')")
+
+        # Auto-resolve API key from environment if not provided
         if api_key is None and not (router and isinstance(router, Router)):
-            raise ValueError("api_key is required (or use router='auto')")
+            _provider_str = provider.value if isinstance(provider, AIProvider) else provider.lower()
+            _key_map = {
+                "openai": "OPENAI_API_KEY",
+                "anthropic": "ANTHROPIC_API_KEY",
+                "google": "GOOGLE_API_KEY",
+                "deepseek": "DEEPSEEK_API_KEY",
+                "xai": "XAI_API_KEY",
+            }
+            if _provider_str in _key_map:
+                api_key = os.getenv(_key_map[_provider_str])
+            if api_key is None:
+                raise ValueError("api_key is required (or use router='auto')")
 
         # Convert string to enum if needed
         if isinstance(provider, str):

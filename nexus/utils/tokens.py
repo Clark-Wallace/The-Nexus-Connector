@@ -28,6 +28,8 @@ MODEL_ENCODINGS = {
     # Claude models (use cl100k_base as approximation - similar to GPT-4)
     "claude-3-opus": "cl100k_base",
     "claude-3-5-sonnet": "cl100k_base",
+    "claude-sonnet-4": "cl100k_base",
+    "claude-opus-4": "cl100k_base",
     "claude-3-sonnet": "cl100k_base",
     "claude-3-haiku": "cl100k_base",
     # Default for most modern models

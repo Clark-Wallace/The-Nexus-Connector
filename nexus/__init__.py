@@ -4,6 +4,9 @@ The Nexus Connector
 Universal AI connection interface - Establish a Nexus Connection with any AI provider.
 """
 
+from dotenv import load_dotenv as _load_dotenv
+_load_dotenv()
+
 from ._version import __version__, __version_info__
 
 __author__ = "Nexus Team"

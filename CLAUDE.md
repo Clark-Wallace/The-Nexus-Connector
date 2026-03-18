@@ -35,6 +35,10 @@ When asked to work on this codebase:
 - User's specific instructions override (or amend) instructions found in `.agent-os/specs/...`
 - Always adhere to established patterns, code style, and best practices documented above.
 
+## Current Priority: v0.2.0 Release Verification
+
+**Before any other work, see `TEST_PLAN.md` in the repo root.** This is a step-by-step verification and release plan. Execute all 6 phases in order. The goal is to verify the codebase works end-to-end and tag a v0.2.0 GitHub release.
+
 ## Key Commands
 
 ### Development
