@@ -247,31 +247,10 @@
     
     <div class="quick-start">
         <h3>🚀 Quick Start</h3>
-        <p><strong>Step 1:</strong> Open a new terminal window</p>
-        <p><strong>Step 2:</strong> Navigate to the examples folder:</p>
-        <pre><code>cd /Users/clarkwallace/Desktop/Projects\ Main/The-Nexus-Connector/examples</code></pre>
-        
-        <p><strong>Step 3:</strong> Set up your configuration (first time only):</p>
-        <pre><code>cp .env.example .env
-# Edit .env and add your API keys</code></pre>
-        
-        <p><strong>Step 4:</strong> Start the server with your chosen AI provider:</p>
-        <pre><code># OpenAI (ChatGPT)
-python nexus_websocket_server.py --provider openai --model gpt-4
-
-# Anthropic (Claude)
-python nexus_websocket_server.py --provider anthropic --model claude-3-opus-20240229
-
-# Google (Gemini)
-python nexus_websocket_server.py --provider google --model gemini-pro
-
-# Local Models (Ollama)
-python nexus_websocket_server.py --provider ollama --model llama2
-
-# Multiple Models (OpenRouter)
-python nexus_websocket_server.py --provider openrouter --model qwen/qwen3-coder</code></pre>
-        
-        <p><strong>Step 5:</strong> Keep this page open and click "Connect" above to start chatting!</p>
+        <p>This page is served by <code>python ui.py</code> from the repo root.</p>
+        <p>Configure your provider by setting API keys in <code>.env</code> (see <code>.env.example</code>).</p>
+        <pre><code>cp .env.example .env   # then edit .env with your API keys
+python ui.py           # starts server and opens this page</code></pre>
     </div>
 
     <script>
@@ -470,10 +449,9 @@ python nexus_websocket_server.py --provider openrouter --model qwen/qwen3-coder<
             input.focus();
         }
 
-        // Auto-connect on load
+        // Auto-connect on load when served by ui.py
         window.addEventListener('load', () => {
-            // Uncomment to auto-connect
-            // connect();
+            connect();
         });
     </script>
 </body>
