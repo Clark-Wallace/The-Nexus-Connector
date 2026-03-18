@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nexus Multi-Provider Chat Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -189,6 +190,68 @@
             border-radius: 3px;
             font-family: 'Courier New', monospace;
         }
+        /* Markdown rendering inside AI chat bubbles */
+        .ai-message .message-content p {
+            margin: 0 0 8px 0;
+        }
+        .ai-message .message-content p:last-child {
+            margin-bottom: 0;
+        }
+        .ai-message .message-content h1,
+        .ai-message .message-content h2,
+        .ai-message .message-content h3,
+        .ai-message .message-content h4 {
+            margin: 8px 0 4px 0;
+            font-size: 1em;
+            font-weight: 700;
+        }
+        .ai-message .message-content h1 { font-size: 1.1em; }
+        .ai-message .message-content h2 { font-size: 1.05em; }
+        .ai-message .message-content ul,
+        .ai-message .message-content ol {
+            margin: 4px 0;
+            padding-left: 20px;
+        }
+        .ai-message .message-content li {
+            margin: 2px 0;
+        }
+        .ai-message .message-content pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 6px 0;
+            font-size: 13px;
+        }
+        .ai-message .message-content pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+            font-size: inherit;
+        }
+        .ai-message .message-content code {
+            background: rgba(0,0,0,0.08);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .ai-message .message-content blockquote {
+            border-left: 3px solid #aaa;
+            margin: 6px 0;
+            padding: 2px 10px;
+            color: #555;
+        }
+        .ai-message .message-content table {
+            border-collapse: collapse;
+            margin: 6px 0;
+            font-size: 0.9em;
+        }
+        .ai-message .message-content th,
+        .ai-message .message-content td {
+            border: 1px solid #ccc;
+            padding: 4px 8px;
+        }
     </style>
 </head>
 <body>
@@ -254,6 +317,9 @@ python ui.py           # starts server and opens this page</code></pre>
     </div>
 
     <script>
+        // Configure marked for chat-friendly rendering
+        marked.use({ breaks: true });
+
         let ws = null;
         let sessionId = localStorage.getItem('nexus-session-id') || null;
         let isConnected = false;
@@ -280,7 +346,11 @@ python ui.py           # starts server and opens this page</code></pre>
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.textContent = content;
+            if (isUser) {
+                contentDiv.textContent = content;
+            } else {
+                contentDiv.innerHTML = marked.parse(content);
+            }
             
             messageDiv.appendChild(avatarDiv);
             messageDiv.appendChild(contentDiv);
@@ -368,11 +438,13 @@ python ui.py           # starts server and opens this page</code></pre>
                         break;
                     
                     case 'stream_chunk':
-                        // For streaming, append to last AI message
-                        const messages = document.querySelectorAll('.ai-message .message-content');
-                        if (messages.length > 0) {
-                            const lastMessage = messages[messages.length - 1];
-                            lastMessage.textContent += data.content;
+                        // For streaming, accumulate raw text and re-render markdown
+                        const aiMessages = document.querySelectorAll('.ai-message .message-content');
+                        if (aiMessages.length > 0) {
+                            const lastMsg = aiMessages[aiMessages.length - 1];
+                            // Store raw text in data attribute for accumulation
+                            lastMsg.dataset.raw = (lastMsg.dataset.raw || '') + data.content;
+                            lastMsg.innerHTML = marked.parse(lastMsg.dataset.raw);
                         } else {
                             addMessage(data.content);
                         }
