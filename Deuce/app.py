@@ -230,19 +230,24 @@ class Deuce(App):
 
     @work(thread=True)
     def _pick_folder(self) -> None:
-        """Run the OS folder picker in a thread (blocks, can't be async)."""
-        from tkinter import Tk, filedialog
-        root = Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        folder = filedialog.askdirectory(
-            title="Open Workspace",
-            initialdir=str(Path(self.workspace).resolve()),
+        """Open native macOS folder picker via osascript."""
+        import subprocess
+        start_dir = str(Path(self.workspace).resolve())
+        script = (
+            'set chosenFolder to choose folder with prompt '
+            '"Open Workspace" default location POSIX file "' + start_dir + '"\n'
+            'return POSIX path of chosenFolder'
         )
-        root.destroy()
-
-        if folder:
-            self.call_from_thread(self._switch_workspace, folder)
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True, text=True, timeout=60,
+            )
+            folder = result.stdout.strip().rstrip("/")
+            if result.returncode == 0 and folder:
+                self.call_from_thread(self._switch_workspace, folder)
+        except Exception:
+            pass
 
     def _switch_workspace(self, folder: str) -> None:
         """Switch everything to the new workspace folder."""
