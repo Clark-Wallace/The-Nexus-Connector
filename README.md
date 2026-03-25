@@ -29,9 +29,9 @@ source venv/bin/activate && python ui.py
 ```
 
 **This opens a web UI in your browser** where you can:
-- 🔨 **Build** — Describe what you want, AI builds it
 - 💬 **Chat** — Talk to any AI provider
-- 📂 **Projects** — Browse, download, and manage saved projects
+- 🔨 **Build** — Describe what you want, AI builds it with tool calls
+- 🔄 **Switch Providers** — Swap between providers live from the dropdown
 
 <p align="center">
 <img src="https://img.shields.io/badge/No_Terminal_Required-brightgreen?style=for-the-badge" alt="No Terminal Required">
@@ -494,7 +494,8 @@ handler = RetryHandler(config=RETRY_CONFIGS["standard"])
 # Options: "aggressive", "standard", "conservative", "rate_limit"
 
 # Circuit breaker prevents hammering a dead service
-cb = CircuitBreaker("openai", failure_threshold=5, timeout=30.0)
+from nexus.core.retry import CircuitBreakerConfig
+cb = CircuitBreaker("openai", config=CircuitBreakerConfig(failure_threshold=5, timeout=30.0))
 
 # Rate limiting per provider
 limiter = get_rate_limiter("openai")
@@ -883,12 +884,12 @@ result.execution_log    # ExecutionLog - Detailed execution data
 - [x] **Custom connectors** — Extensible architecture for new providers
 - [x] **Prometheus metrics** — Full observability stack
 - [x] **Web server** — FastAPI with auth middleware
+- [x] **Web UI** — Browser-based chat with live provider switching
 
 ### 🔮 Coming Soon
 
 - [ ] More providers (Cohere, Mistral, AWS Bedrock)
 - [ ] Response caching layer
-- [ ] Web UI dashboard
 - [ ] Docker images
 - [ ] Kubernetes manifests
 - [ ] VS Code extension
