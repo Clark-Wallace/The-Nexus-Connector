@@ -41,6 +41,18 @@ PROVIDER_NAMES = {
 }
 
 
+def get_available_providers():
+    """Return dict of provider_id -> api_key for all configured providers."""
+    available = {}
+    for prov, env_var in KEY_MAP.items():
+        api_key = os.getenv(env_var)
+        if api_key:
+            available[prov] = api_key
+    # Ollama is always available (local, no key needed)
+    available["ollama"] = ""
+    return available
+
+
 def detect_provider():
     """Auto-detect provider from NEXUS_DEFAULT_PROVIDER or first available API key."""
     provider = os.getenv("NEXUS_DEFAULT_PROVIDER")
@@ -102,6 +114,58 @@ def main():
     @connector.app.get("/", response_class=HTMLResponse)
     async def serve_ui():
         return html_content
+
+    # Provider listing and switching
+    available_providers = get_available_providers()
+
+    @connector.app.get("/providers")
+    async def list_providers():
+        all_ids = list(KEY_MAP.keys()) + ["ollama"]
+        providers = []
+        for pid in all_ids:
+            providers.append({
+                "id": pid,
+                "name": PROVIDER_NAMES.get(pid, pid),
+                "available": pid in available_providers,
+            })
+        return {
+            "providers": providers,
+            "current": connector.provider.value,
+        }
+
+    @connector.app.post("/provider/switch")
+    async def switch_provider(request: dict):
+        from fastapi import HTTPException
+        target = request.get("provider")
+        if not target or target not in available_providers:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Provider '{target}' is not available. Configure its API key in .env"
+            )
+        target_key = available_providers[target]
+        connector.provider = AIProvider(target)
+        connector.api_key = target_key
+        connector.model = None  # use provider default
+
+        # Rebuild wrapper factory and WebSocket manager so new sessions use the new provider
+        connector.wrapper_factory = lambda: __import__(
+            'nexus.core.unified_wrapper', fromlist=['UnifiedAIWrapper']
+        ).UnifiedAIWrapper(
+            provider=connector.provider,
+            api_key=connector.api_key,
+            model=connector.model,
+            **connector.wrapper_kwargs
+        )
+        connector.ws_manager.wrapper_factory = connector.wrapper_factory
+
+        # Clear existing sessions so next message uses new provider
+        await connector.session_store.clear()
+
+        return {
+            "success": True,
+            "provider": target,
+            "name": PROVIDER_NAMES.get(target, target),
+        }
 
     # Auto-open browser after server starts
     @connector.app.on_event("startup")

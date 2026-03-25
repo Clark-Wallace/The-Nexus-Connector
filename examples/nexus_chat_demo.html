@@ -34,6 +34,35 @@
             font-weight: bold;
             font-size: 14px;
         }
+        #providerSelect {
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 2px solid #e0e0e0;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            outline: none;
+            appearance: auto;
+            color: white;
+            transition: border-color 0.2s;
+        }
+        #providerSelect:focus {
+            border-color: #667eea;
+        }
+        #providerSelect option {
+            color: #333;
+            background: white;
+        }
+        #providerSelect option:disabled {
+            color: #aaa;
+        }
+        .provider-switching {
+            font-size: 13px;
+            color: #856404;
+            font-style: italic;
+            margin-left: 10px;
+            display: none;
+        }
         .openai { background-color: #74aa9c; color: white; }
         .anthropic { background-color: #d97757; color: white; }
         .google { background-color: #4285f4; color: white; }
@@ -283,8 +312,11 @@
     
     <div class="provider-info">
         <div>
-            <strong>Current Provider:</strong>
-            <span id="providerBadge" class="provider-badge">Not Connected</span>
+            <strong>Provider:</strong>
+            <select id="providerSelect" onchange="switchProvider(this.value)" disabled>
+                <option value="">Loading...</option>
+            </select>
+            <span class="provider-switching" id="switchingIndicator">Switching...</span>
             <span id="modelInfo" style="margin-left: 10px; color: #666;"></span>
         </div>
         <div class="status disconnected" id="status">
@@ -475,13 +507,90 @@ python ui.py           # starts server and opens this page</code></pre>
             }
         }
 
-        async function fetchServerInfo() {
+        // Provider color map for dropdown styling
+        const providerColors = {
+            anthropic: '#d97757', openai: '#74aa9c', google: '#4285f4',
+            xai: '#000', deepseek: '#5e35b1', ollama: '#333'
+        };
+
+        function styleProviderSelect(providerId) {
+            const sel = document.getElementById('providerSelect');
+            sel.style.backgroundColor = providerColors[providerId] || '#667eea';
+            sel.style.borderColor = providerColors[providerId] || '#667eea';
+        }
+
+        async function loadProviders() {
             try {
-                const response = await fetch('http://localhost:8000/health');
+                const response = await fetch('/providers');
+                const data = await response.json();
+                const sel = document.getElementById('providerSelect');
+                sel.innerHTML = '';
+                for (const p of data.providers) {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.name;
+                    if (!p.available) {
+                        opt.disabled = true;
+                        opt.textContent += ' (no API key)';
+                    }
+                    if (p.id === data.current) {
+                        opt.selected = true;
+                    }
+                    sel.appendChild(opt);
+                }
+                sel.disabled = false;
+                styleProviderSelect(data.current);
+            } catch (e) {
+                console.error('Failed to load providers:', e);
+            }
+        }
+
+        async function switchProvider(providerId) {
+            const indicator = document.getElementById('switchingIndicator');
+            const sel = document.getElementById('providerSelect');
+            indicator.textContent = `Switching to ${sel.options[sel.selectedIndex].text}...`;
+            indicator.style.display = 'inline';
+            sel.disabled = true;
+
+            try {
+                const response = await fetch('/provider/switch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider: providerId })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Switch failed');
+                }
+
+                styleProviderSelect(providerId);
+                document.getElementById('modelInfo').textContent = '';
+
+                // Reconnect WebSocket to get new provider session
+                if (isConnected) {
+                    sessionId = null;
+                    localStorage.removeItem('nexus-session-id');
+                    disconnect();
+                    setTimeout(() => {
+                        connect();
+                        addTaskSummary(`Switched to ${data.name}`);
+                    }, 300);
+                }
+            } catch (e) {
+                console.error('Provider switch failed:', e);
+                // Reload providers to reset dropdown to actual state
+                await loadProviders();
+            } finally {
+                indicator.style.display = 'none';
+                sel.disabled = false;
+            }
+        }
+
+        async function fetchServerInfo() {
+            // Now handled by loadProviders; just update model from health
+            try {
+                const response = await fetch('/health');
                 const info = await response.json();
-                
-                document.getElementById('providerBadge').className = `provider-badge ${info.provider}`;
-                document.getElementById('providerBadge').textContent = info.provider.toUpperCase();
                 document.getElementById('modelInfo').textContent = info.model || '';
             } catch (e) {
                 // Server info not available
@@ -505,10 +614,11 @@ python ui.py           # starts server and opens this page</code></pre>
                 document.getElementById('messageInput').disabled = false;
                 document.getElementById('sendBtn').disabled = false;
                 document.getElementById('connectBtn').textContent = 'Disconnect';
-                
-                // Fetch server info
+
+                // Load provider dropdown and server info
+                loadProviders();
                 fetchServerInfo();
-                
+
                 // Start stats updates
                 fetchStats();
                 statsInterval = setInterval(fetchStats, 2000);
