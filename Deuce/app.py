@@ -17,6 +17,7 @@ from widgets.chat_panel import ChatPanel
 from widgets.action_ledger import ActionLedger
 from widgets.file_browser import FileBrowser
 from widgets.confirm_dialog import ConfirmDialog
+from widgets.provider_switcher import ProviderSwitcher
 from connector import DeuceConnector, PROVIDER_NAMES
 
 
@@ -30,6 +31,7 @@ class Deuce(App):
     BINDINGS = [
         ("tab", "focus_next", "Next"),
         ("shift+tab", "focus_previous", "Prev"),
+        ("ctrl+p", "focus_provider", "Provider"),
         ("ctrl+l", "clear_ledger", "Clear Ledger"),
         ("ctrl+n", "new_session", "New Session"),
         ("ctrl+q", "quit", "Quit"),
@@ -56,6 +58,17 @@ class Deuce(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
+        # Build provider options from available providers
+        available = self.deuce_connector.available_providers
+        provider_options = {
+            pid: PROVIDER_NAMES.get(pid, pid)
+            for pid in available
+        }
+        yield ProviderSwitcher(
+            providers=provider_options,
+            current=self.deuce_connector.current_provider,
+            id="provider-bar",
+        )
         with Horizontal(id="main-container"):
             with Vertical(id="left-column"):
                 yield ChatPanel(id="chat-area")
@@ -187,6 +200,26 @@ class Deuce(App):
             browser.refresh_tree()
         except Exception:
             pass
+
+    # ── Provider switching ────────────────────────────────
+
+    def on_provider_switcher_provider_changed(self, event: ProviderSwitcher.ProviderChanged) -> None:
+        """User selected a new provider from the dropdown."""
+        provider_id = event.provider_id
+        chat = self.query_one(ChatPanel)
+        ledger = self.query_one(ActionLedger)
+
+        success = self.deuce_connector.switch_provider(provider_id)
+        if success:
+            name = PROVIDER_NAMES.get(provider_id, provider_id)
+            chat.add_system_message(f"Switched to {name}")
+            ledger.log_info(f"Provider → {name}")
+            self._update_footer()
+        else:
+            chat.add_system_message(f"Failed to switch to {provider_id}")
+
+    def action_focus_provider(self) -> None:
+        self.query_one("#provider-select").focus()
 
     # ── Actions ──────────────────────────────────────────
 
