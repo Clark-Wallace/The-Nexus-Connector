@@ -43,7 +43,7 @@ class ToolExecutor:
         self.executed_operations: List[Dict[str, Any]] = []
 
         # Initialize or use provided registry
-        self.registry = registry or ToolRegistry()
+        self.registry = registry if registry is not None else ToolRegistry()
 
         # Register built-in tools
         self._register_builtin_tools()
