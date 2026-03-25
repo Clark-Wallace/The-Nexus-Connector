@@ -79,12 +79,16 @@ def main():
     # Disable request auth for local UI (NEXUS_API_KEY is for production deployments)
     saved_nexus_key = os.environ.pop("NEXUS_API_KEY", None)
 
+    workspace = os.getenv("NEXUS_WORKSPACE", "./workspace")
+    Path(workspace).mkdir(exist_ok=True)
+
     connector = WebConnector(
         provider=AIProvider(provider),
         api_key=api_key,
         model=os.getenv("NEXUS_DEFAULT_MODEL") or None,
         port=port,
         host=host,
+        workspace=workspace,
     )
 
     # Restore env var in case other code needs it

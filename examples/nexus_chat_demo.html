@@ -108,9 +108,30 @@
         }
         .typing-indicator {
             display: none;
-            padding: 20px;
+            padding: 10px 20px;
             color: #6c757d;
             font-style: italic;
+        }
+        .tool-activity {
+            padding: 4px 20px 4px 58px;
+            font-size: 13px;
+            color: #666;
+            font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+        }
+        .tool-activity .tool-call {
+            color: #856404;
+        }
+        .tool-activity .tool-result {
+            color: #155724;
+        }
+        .tool-activity .tool-error {
+            color: #721c24;
+        }
+        .task-summary {
+            padding: 8px 20px 8px 58px;
+            font-size: 13px;
+            color: #155724;
+            font-weight: 600;
         }
         .input-area {
             padding: 20px;
@@ -331,8 +352,86 @@ python ui.py           # starts server and opens this page</code></pre>
             statusEl.textContent = text;
         }
 
-        function showTyping(show) {
-            document.getElementById('typingIndicator').style.display = show ? 'block' : 'none';
+        function showTyping(show, text = 'AI is thinking...') {
+            const el = document.getElementById('typingIndicator');
+            el.textContent = text;
+            el.style.display = show ? 'block' : 'none';
+            if (show) {
+                document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            }
+        }
+
+        function addToolActivity(entries) {
+            const messagesEl = document.getElementById('messages');
+            for (const entry of entries) {
+                const div = document.createElement('div');
+                div.className = 'tool-activity';
+                div.innerHTML = entry;
+                messagesEl.appendChild(div);
+            }
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function addTaskSummary(text) {
+            const messagesEl = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'task-summary';
+            div.textContent = text;
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function formatToolActivity(toolCalls, toolResults) {
+            const entries = [];
+            const resultMap = {};
+            for (const tr of toolResults) {
+                resultMap[tr.tool_call_id || tr.tool_name] = tr;
+            }
+
+            const filesCreated = [];
+
+            for (const tc of toolCalls) {
+                const name = tc.name || tc.function?.name || 'unknown';
+                const args = tc.arguments || tc.function?.arguments || {};
+                const id = tc.id || name;
+
+                // Format the tool call
+                let callText = '';
+                if (name === 'create_file' || name === 'write_file') {
+                    callText = `<span class="tool-call">🔧 ${name}: ${args.path || args.filename || '?'}</span>`;
+                } else if (name === 'execute_command') {
+                    callText = `<span class="tool-call">🔧 Running: ${args.command || '?'}</span>`;
+                } else if (name === 'read_file') {
+                    callText = `<span class="tool-call">🔧 Reading: ${args.path || args.filename || '?'}</span>`;
+                } else if (name === 'edit_file') {
+                    callText = `<span class="tool-call">🔧 Editing: ${args.path || args.filename || '?'}</span>`;
+                } else if (name === 'delete_file') {
+                    callText = `<span class="tool-call">🔧 Deleting: ${args.path || args.filename || '?'}</span>`;
+                } else {
+                    callText = `<span class="tool-call">🔧 ${name}(${Object.keys(args).join(', ')})</span>`;
+                }
+                entries.push(callText);
+
+                // Format the result
+                const result = resultMap[id] || resultMap[name];
+                if (result) {
+                    const r = result.result;
+                    if (r && r.success === false) {
+                        entries.push(`<span class="tool-error">❌ Error: ${r.error || 'failed'}</span>`);
+                    } else {
+                        let detail = '';
+                        if ((name === 'create_file' || name === 'write_file') && args.path) {
+                            const fname = args.path.split('/').pop();
+                            filesCreated.push(fname);
+                            const lines = (args.content || '').split('\\n').length;
+                            detail = ` (${lines} lines)`;
+                        }
+                        entries.push(`<span class="tool-result">✅ Done${detail}</span>`);
+                    }
+                }
+            }
+
+            return { entries, filesCreated };
         }
 
         function addMessage(content, isUser = false, isSystem = false) {
@@ -427,9 +526,29 @@ python ui.py           # starts server and opens this page</code></pre>
                         break;
                     
                     case 'response':
-                        addMessage(data.content);
-                        if (data.metadata && data.metadata.tokens_used) {
-                            console.log(`Tokens used: ${data.metadata.tokens_used}`);
+                        console.log('Response metadata:', data.metadata);
+
+                        // Show tool activity if present
+                        if (data.metadata) {
+                            const tc = data.metadata.tool_calls || [];
+                            const tr = data.metadata.tool_results || [];
+                            if (tc.length > 0) {
+                                const { entries, filesCreated } = formatToolActivity(tc, tr);
+                                addToolActivity(entries);
+                                if (filesCreated.length > 0) {
+                                    addTaskSummary(
+                                        `✅ Task complete — ${filesCreated.length} file${filesCreated.length > 1 ? 's' : ''} created (${filesCreated.join(', ')})`
+                                    );
+                                }
+                            }
+                            if (data.metadata.tokens_used) {
+                                console.log(`Tokens used: ${data.metadata.tokens_used}`);
+                            }
+                        }
+
+                        // Show AI text response
+                        if (data.content) {
+                            addMessage(data.content);
                         }
                         break;
                     
@@ -506,8 +625,8 @@ python ui.py           # starts server and opens this page</code></pre>
             // Add user message to chat
             addMessage(message, true);
             
-            // Show typing indicator
-            showTyping(true);
+            // Show working indicator
+            showTyping(true, 'AI is working...');
             
             // Send message through WebSocket
             ws.send(JSON.stringify({
