@@ -31,6 +31,7 @@ class Deuce(App):
     BINDINGS = [
         ("tab", "focus_next", "Next"),
         ("shift+tab", "focus_previous", "Prev"),
+        ("ctrl+o", "open_folder", "Open Folder"),
         ("ctrl+p", "focus_provider", "Provider"),
         ("ctrl+l", "clear_ledger", "Clear Ledger"),
         ("ctrl+n", "new_session", "New Session"),
@@ -221,6 +222,66 @@ class Deuce(App):
     def action_focus_provider(self) -> None:
         self.query_one("#provider-select").focus()
 
+    # ── Workspace switching ────────────────────────────────
+
+    def action_open_folder(self) -> None:
+        """Open native folder picker and switch workspace."""
+        self._pick_folder()
+
+    @work(thread=True)
+    def _pick_folder(self) -> None:
+        """Run the OS folder picker in a thread (blocks, can't be async)."""
+        from tkinter import Tk, filedialog
+        root = Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        folder = filedialog.askdirectory(
+            title="Open Workspace",
+            initialdir=str(Path(self.workspace).resolve()),
+        )
+        root.destroy()
+
+        if folder:
+            self.call_from_thread(self._switch_workspace, folder)
+
+    def _switch_workspace(self, folder: str) -> None:
+        """Switch everything to the new workspace folder."""
+        self.workspace = folder
+        Path(folder).mkdir(parents=True, exist_ok=True)
+
+        # Repoint the connector
+        from tools import set_workspace
+        set_workspace(folder)
+        self.deuce_connector.workspace = folder
+        self.deuce_connector._connector = None  # rebuild with new context
+
+        # Repoint the file browser
+        browser = self.query_one(FileBrowser)
+        tree = browser.query_one("#file-tree")
+        tree.path = folder
+        tree.reload()
+
+        # Reset session stats
+        self._total_tokens = 0
+        self._total_cost = 0.0
+        self._files_created = []
+
+        # Notify user
+        chat = self.query_one(ChatPanel)
+        ledger = self.query_one(ActionLedger)
+        short = self._short_path(folder)
+        chat.add_system_message(f"Workspace → {short}")
+        ledger.log_info(f"Workspace → {short}")
+        self._update_footer()
+
+    @staticmethod
+    def _short_path(path: str) -> str:
+        """Shorten path for display."""
+        home = str(Path.home())
+        if path.startswith(home):
+            return "~" + path[len(home):]
+        return path
+
     # ── Actions ──────────────────────────────────────────
 
     def action_clear_ledger(self) -> None:
@@ -241,8 +302,9 @@ class Deuce(App):
     def _update_footer(self) -> None:
         provider = self.deuce_connector.provider_display_name
         n_files = len(self._files_created)
+        ws = self._short_path(self.workspace)
         self.sub_title = (
-            f"{provider} │ {self._total_tokens:,} tokens │ "
+            f"{provider} │ {ws} │ {self._total_tokens:,} tokens │ "
             f"${self._total_cost:.4f} │ {n_files} files"
         )
 
