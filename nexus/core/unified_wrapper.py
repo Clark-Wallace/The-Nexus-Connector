@@ -513,7 +513,7 @@ class UnifiedAIWrapper:
                 if iteration == 0:
                     message = task
                 else:
-                    message = "Continue with the task."
+                    message = "Continue. Use tools to complete the task."
 
                 if show_progress and iteration > 0:
                     self.logger.info(f"Iteration {iteration + 1}/{self.max_iterations}")
@@ -539,18 +539,24 @@ class UnifiedAIWrapper:
                     result.tokens_used += response["usage"].get("total_tokens", 0)
 
                 # Check for task completion:
-                # If the AI responded with text and made no tool calls, the task is done.
-                # The model decides when it's finished — no magic phrases needed.
-                if response["content"] and not response["tool_calls"]:
-                    if show_progress:
-                        self.logger.info("Task completed successfully!")
-                    result.success = True
-                    exec_log.log_step_end(
-                        iteration + 1,
-                        success=True,
-                        duration_ms=(time.time() - step_start) * 1000
-                    )
-                    break
+                # The AI is done when it responds with text and no tool calls.
+                # But some models explain what they'll do before doing it, so we
+                # only complete if this is the second consecutive text-only response,
+                # OR if tools were used in a previous iteration (work was done).
+                has_tools = bool(response.get("tool_calls") or response.get("tool_results"))
+                if response["content"] and not has_tools:
+                    # If we already did tool work in prior iterations, this is the summary — done.
+                    # If this is iteration 0 with no tools, the AI just talked — give it one more shot.
+                    if iteration > 0 or result.content.count("--- Iteration") > 0:
+                        if show_progress:
+                            self.logger.info("Task completed successfully!")
+                        result.success = True
+                        exec_log.log_step_end(
+                            iteration + 1,
+                            success=True,
+                            duration_ms=(time.time() - step_start) * 1000
+                        )
+                        break
 
                 exec_log.log_step_end(
                     iteration + 1,
