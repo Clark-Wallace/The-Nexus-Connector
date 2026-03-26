@@ -525,7 +525,7 @@ class UnifiedAIWrapper:
                 if iteration == 0:
                     message = task
                 else:
-                    message = "Continue with the task. What's the next step? If the task is complete, please say 'task complete'."
+                    message = "Continue with the task."
 
                 if show_progress and iteration > 0:
                     self.logger.info(f"Iteration {iteration + 1}/{self.max_iterations}")
@@ -550,8 +550,10 @@ class UnifiedAIWrapper:
                 if response.get("usage"):
                     result.tokens_used += response["usage"].get("total_tokens", 0)
 
-                # Check for task completion
-                if response["content"] and self._is_task_complete(response["content"]):
+                # Check for task completion:
+                # If the AI responded with text and made no tool calls, the task is done.
+                # The model decides when it's finished — no magic phrases needed.
+                if response["content"] and not response["tool_calls"]:
                     if show_progress:
                         self.logger.info("Task completed successfully!")
                     result.success = True
@@ -561,20 +563,6 @@ class UnifiedAIWrapper:
                         duration_ms=(time.time() - step_start) * 1000
                     )
                     break
-
-                # Check if we're stuck
-                if not response["tool_calls"] and response["content"] and "?" in response["content"]:
-                    if show_progress:
-                        self.logger.warning("AI seems stuck, providing guidance...")
-
-                    guide_response = await self.send_message(
-                        "Please proceed with the task using the available tools. "
-                        "If you need to create files, use the create_file tool. "
-                        "If you need to execute commands, use the execute_command tool."
-                    )
-
-                    if guide_response["content"]:
-                        result.content += f"\n\n[Guidance provided]\n{guide_response['content']}"
 
                 exec_log.log_step_end(
                     iteration + 1,
