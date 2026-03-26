@@ -39,7 +39,7 @@ class OllamaConnector(BaseConnector):
         """
         super().__init__(api_key, model, **kwargs)
         self.base_url = base_url.rstrip('/')
-        self.model = model or "llama3.2"
+        self.model = model or "llama3.2:3b"
 
         # Initialize token counter (uses tiktoken for approximation)
         self._token_counter = TokenCounter(self.model)
@@ -55,11 +55,11 @@ class OllamaConnector(BaseConnector):
     @property
     def default_model(self) -> str:
         """Default model for Ollama."""
-        return "llama3.2"
+        return "llama3.2:3b"
 
     def get_default_model(self) -> str:
         """Get the default model for this provider."""
-        return "llama3.2"
+        return "llama3.2:3b"
 
     def format_tool_calls(self, tool_calls: list) -> Any:
         """Ollama doesn't support tool calling — return empty."""
@@ -264,7 +264,7 @@ class OllamaConnector(BaseConnector):
 
 # Helper function for easy setup
 def create_ollama_connector(
-    model: str = "llama3.2",
+    model: str = "llama3.2:3b",
     base_url: str = "http://localhost:11434"
 ) -> OllamaConnector:
     """
