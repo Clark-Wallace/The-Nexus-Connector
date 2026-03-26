@@ -218,6 +218,8 @@ class ToolExecutor:
         Returns:
             Result of tool execution
         """
+        # Normalize common argument name variations from different AI models
+        arguments = self._normalize_arguments(tool_name, arguments)
         # Check registry first
         if tool_name in self.registry:
             # Use registry execution (handles retries, timeouts, etc.)
@@ -303,6 +305,42 @@ class ToolExecutor:
         return self.registry.get_tool_definitions(format)
 
     # ========== Built-in tool implementations ==========
+
+    def _normalize_arguments(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize argument names that different AI models use for the same thing.
+
+        Models sometimes use 'filename' instead of 'path', 'file_path' instead of 'path',
+        'text' instead of 'content', etc. This maps common variations to the canonical names.
+        """
+        args = dict(arguments)  # don't mutate the original
+
+        # Normalize path arguments for file tools
+        file_tools = {"create_file", "write_file", "read_file", "edit_file", "delete_file"}
+        if tool_name in file_tools:
+            if "path" not in args:
+                for alt in ("filename", "file_path", "filepath", "file_name", "name"):
+                    if alt in args:
+                        args["path"] = args.pop(alt)
+                        break
+
+        # Normalize content arguments for write tools
+        write_tools = {"create_file", "write_file"}
+        if tool_name in write_tools:
+            if "content" not in args:
+                for alt in ("text", "data", "file_content", "body", "code"):
+                    if alt in args:
+                        args["content"] = args.pop(alt)
+                        break
+
+        # Normalize command arguments
+        if tool_name == "execute_command":
+            if "command" not in args:
+                for alt in ("cmd", "shell_command", "script", "bash"):
+                    if alt in args:
+                        args["command"] = args.pop(alt)
+                        break
+
+        return args
 
     def _create_file(self, path: str, content: str = "") -> Dict[str, Any]:
         """Create a new file."""
