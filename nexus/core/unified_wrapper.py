@@ -351,18 +351,6 @@ class UnifiedAIWrapper:
                     )
                     self.conversation_history.append(tool_message)
 
-            # Send tool results back to the AI for a final text response
-            if add_to_history and tool_results:
-                messages = self.conversation_history
-                follow_up, _ = await self._send_with_fallback(messages, message, **kwargs)
-                if follow_up.content:
-                    response = follow_up
-                    # Add the follow-up response to history
-                    self.conversation_history.append(
-                        Message(role="assistant", content=follow_up.content,
-                                tool_calls=follow_up.tool_calls)
-                    )
-
         return {
             "content": response.content,
             "tool_calls": response.tool_calls,
