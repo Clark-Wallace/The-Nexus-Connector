@@ -135,15 +135,25 @@ class OllamaConnector(BaseConnector):
                 system_prompt = msg.content
                 continue
 
-            ollama_msg = {"role": msg.role, "content": msg.content}
+            # Ollama requires content to be a string
+            content = msg.content if isinstance(msg.content, str) else str(msg.content or "")
+
+            ollama_msg = {"role": msg.role, "content": content}
 
             # Include tool_calls on assistant messages (for conversation history)
             if msg.tool_calls and msg.role == "assistant":
                 ollama_msg["tool_calls"] = self.format_tool_calls(msg.tool_calls)
+                # Ollama expects empty string content when there are tool calls
+                if not content:
+                    ollama_msg["content"] = ""
 
-            # Include tool_call_id for tool result messages
-            if msg.tool_call_id and msg.role == "tool":
-                ollama_msg["tool_call_id"] = msg.tool_call_id
+            # Tool result messages: Ollama uses "tool" role with content string
+            # No tool_call_id — Ollama doesn't use it
+            if msg.role == "tool":
+                # Ensure content is a plain string, not a dict/object
+                if not isinstance(msg.content, str):
+                    ollama_msg["content"] = json.dumps(msg.content) if msg.content else ""
+                # Don't pass tool_call_id to Ollama — it doesn't use it
 
             ollama_messages.append(ollama_msg)
 
