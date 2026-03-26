@@ -83,7 +83,7 @@ class ToolExecutor:
             description="Write content to a file (overwrites existing)",
             category="file",
         )
-        def write_file(path: str, content: str) -> Dict[str, Any]:
+        def write_file(path: str, content: str = "") -> Dict[str, Any]:
             """
             Write content to a file, overwriting if it exists.
 
@@ -327,10 +327,14 @@ class ToolExecutor:
         write_tools = {"create_file", "write_file"}
         if tool_name in write_tools:
             if "content" not in args:
-                for alt in ("text", "data", "file_content", "body", "code"):
+                for alt in ("text", "data", "file_content", "body", "code", "source", "contents"):
                     if alt in args:
                         args["content"] = args.pop(alt)
                         break
+            # If content is still missing, default to empty string
+            # (some models call write_file with just a path)
+            if "content" not in args:
+                args["content"] = ""
 
         # Normalize command arguments
         if tool_name == "execute_command":
@@ -634,7 +638,7 @@ class ToolExecutor:
         """Create a new file (legacy method)."""
         return self._create_file(path, content)
 
-    def write_file(self, path: str, content: str) -> Dict[str, Any]:
+    def write_file(self, path: str, content: str = "") -> Dict[str, Any]:
         """Write to a file (legacy method)."""
         return self._write_file(path, content)
 
