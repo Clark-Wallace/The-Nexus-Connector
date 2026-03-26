@@ -56,6 +56,18 @@ class OllamaConnector(BaseConnector):
     def default_model(self) -> str:
         """Default model for Ollama."""
         return "llama2"
+
+    def get_default_model(self) -> str:
+        """Get the default model for this provider."""
+        return "llama2"
+
+    def format_tool_calls(self, tool_calls: list) -> Any:
+        """Ollama doesn't support tool calling — return empty."""
+        return []
+
+    def extract_tool_calls(self, response: Any) -> list:
+        """Ollama doesn't support tool calling — return empty."""
+        return []
     
     def count_tokens(self, text: str) -> int:
         """
